@@ -22,7 +22,6 @@
       // Feb. 29th, 2016.
 
       // TODO - UI
-      // TODO - display private keys in WIF
       // TODO - progress bar for scan
       // TODO - settings for how many addresses to scan for
       // TODO - intelligently scan (look for a gap of 'n')
@@ -63,20 +62,39 @@
             $('#btnScan').prop("disabled", false);
           }
         });
+
+        $('')
       });
 
       // Check Insight for a balance
       var getDetails = function(addr, callback) {
         $.ajax({
-          url: explorerUrl + 'api/addr/' + addr.toString(),
+          url: explorerUrl + 'api/addr/' + addr.toString() + '?noTxList=1&noCache=1',
           type: 'GET',
           async: false
         }).done(function(data){
           callback(data);
         }).error(function(xhr){
           console.error(xhr);
-          $('#phase-1-message').text('Unable to retrieve details for address ' + addr);
+          $('#phase-1-message').text('Unable to retrieve details for address ' + addr.toString());
+          $('#phase-1-message').addClass('text-danger');
           $('#phase-1-message').removeClass('hidden');
+        });
+      };
+
+      // Retrieve UXTOs from Insight
+      var getUtxos = function(addr, callback) {
+        $.ajax({
+          url: explorerUrl + 'api/addr/' + addr.toString() + '/utxo?noCache=1',
+          type: 'GET',
+          async: false
+        }).done(function(data){
+          callback(data);
+        }).error(function(xhr){
+          console.error(xhr);
+          $('#phase-2-message').text('Unable to retrieve UXTOs for address ' + addr.toString());
+          $('#phase-2-message').addClass('text-danger');
+          $('#phase-2-message').removeClass('hidden');
         });
       };
 
@@ -88,23 +106,42 @@
           var pub = hkey.derive(path + '/' + i).eckey.public;
           var prv = hkey.derive(path + '/' + i).eckey.private;
 
-          var addr = bitcore.Address.fromPubKey(pub);
-          if (verbose) console.log(i + ': ' + addr.toString());
+          // Make Bitcore private key object
+          var prvKey = new bitcore.PrivateKey(bitcore.networks.livenet.privKeyVersion, prv, true);
+
+          // Make an address
+          var pubkeys = []
+          var wk = new bitcore.WalletKey();
+          wk.fromObj({
+            priv: prvKey.toString()
+          });
+          pubkeys.push(wk.privKey.public);
+          
+          var addr = wk.storeObj().addr;
+
+          if (verbose) console.log('#' + i + ' ' + addr.toString() + ':' + prvKey.toString());
 
           // Create a 1-of-1 multisig address from that
-          mAddr = bitcore.Address.fromPubKeys(1, [pub]);
+          var mReq = 1;
+          var pubKeys = pubkeys; //[pub];
+          var script = bitcore.Script.createMultisig(mReq, pubKeys);
+          mAddr = bitcore.Address.fromScript(script);
+
+          // mAddr = bitcore.Address.fromPubKeys(1, [pub]);
           if (verbose) console.log('1-of-1 multisig address: ' + mAddr.toString());
 
           // Check for a balance
           var next = false;
           getDetails(mAddr, function(details){
             if (details.balance > 0) {
-            if (verbose) console.log(addr.toString() + ' has a balance of ' + details.balance);
+              if (verbose) console.log(mAddr.toString() + ' has a balance of ' + details.balance);
 
               addresses[addr.toString()] = {
                 addr: mAddr,
+                script: script,
                 details: details,
-                private: bitcore.buffertools.toHex(prv)
+                private: prvKey,
+                public: pubKeys
               };
             }
             next = true;
@@ -152,7 +189,6 @@
           var str = '<tr>';
           str += '<td><a href=\"'+explorerUrl+'address/'+address.addr.toString()+'\" target=\"_blank\">'+address.addr.toString()+'</a></td>';
           str += '<td>'+address.details.balance+' START</td>';
-          str += '<td>'+address.private+'</td>';
           str += '</tr>';
           resultsTable.append(str);
         });
@@ -171,8 +207,55 @@
 
       // Sweep address balance to a specified address
       var sweep = function() {
-        // TODO - build a transaction and sweep to address
-        var addr = $('#address').val();
+
+        // Specified destination address
+        var outAddr = $('#address').val();
+
+        // TODO - this will sweep the balances one at a time
+        // This isn't ideal!
+        $.each(addresses, function(i, address) {
+          getUtxos(address.addr, function(utxos) {
+            // Set fee for miners
+            var fee = 0.0001;
+
+            // Make pubkeys object
+            var pubkeys = []
+            var wk = new bitcore.WalletKey();
+            wk.fromObj({
+              priv: address.private.toString()
+            });
+            pubkeys.push(bitcore.buffertools.toHex(wk.privKey.public));
+
+            var opts = {
+              nReq: 1,
+              pubkeys: pubkeys,
+              fee: fee
+            };
+
+            var outs = [{
+              address: outAddr,
+              amount: (address.details.balance - fee)
+            }];
+
+            // Map the redeem script to its p2sh address
+            // https://github.com/bitpay/bitcore/issues/286
+            var hashMap = {};
+            hashMap[address.addr.toString()] = address.script.serialize();
+
+            // Build the transaction
+            var tx = (new bitcore.TransactionBuilder(opts))
+              .setUnspent(utxos)
+              .setHashToScriptMap(hashMap)
+              .setOutputs(outs)
+              .sign([address.private.toString()])
+              .build();
+
+            // These need to happen after .build()
+            console.log('=> Missing signatures: ', tx.countInputMissingSignatures(0));
+            var txHex = tx.serialize().toString('hex');
+            console.log('=> Transaction: ', txHex);
+          });
+        });
       };
 
     </script>
@@ -210,7 +293,6 @@
               <tr>
                 <th>Address</th>
                 <th>Balance</th>
-                <th>Private Key (Hex)</th>
               </tr>
             </thead>
             <tbody>
@@ -224,16 +306,17 @@
         <div class="col-md-12">
           <hr />
           <p><strong>Phase 2.</strong> Enter a StartCOIN address to send your coins to.</p>
+          <p id="phase-2-message" class="hidden"></p>
 
           <form role="form" class="">
 
             <div class="form-group">
               <label for="address">Destination address:</label>
-              <input type="text" class="form-control" id="address" placeholder="Address to sweep to (i.e. shCEpRzKYczDo4DfhGNzTUYzsYRgSiG7Cw)" />
+              <input type="text" class="form-control" id="address" placeholder="Address to sweep to (i.e. shCEpRzKYczDo4DfhGNzTUYzsYRgSiG7Cw)"/>
             </div>
 
             <div class="form-group">
-              <button type="button" class="btn btn-danger" id="btnSweep" onclick="sweep();" disabled>Sweep</button>
+              <button type="button" class="btn btn-danger" id="btnSweep" onclick="sweep();">Sweep</button>
             </div>
 
           </form>
