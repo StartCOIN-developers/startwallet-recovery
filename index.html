@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>StartWallet Rescue</title>
+
+    <!-- Latest compiled and minified CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+
+    <!-- Optional theme -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css" integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r" crossorigin="anonymous">
+
+    <!-- Custom styles -->
+    <style>
+      .code { font-family: Consolas, Lucida Console, monospace; }
+    </style>
+  </head>
+  <body>
+    <script src="bitcore.js"></script>
+    <script src="https://code.jquery.com/jquery-1.12.0.min.js"></script>
+    <script>
+
+      // Created by Luke Mitchell <hi@lukemitchell.co> for StartJOIN
+      // Feb. 29th, 2016.
+
+      // TODO - UI
+      // TODO - progress bar for scan
+      // TODO - decode xprv from startwallet backup
+
+      // Use the StartCOIN Bitcore bundle
+      // This was taken from git://github.com/startcoin-project/bitcore.git#1a5c0c3d424a090f4709897a7e103545345529da and build using "npm install"
+      var bitcore = require('bitcore');
+
+      // Enable for console logging
+      var verbose = true;
+
+      // Broadcast sweep transaction to blockchain
+      var broadcastSweepTransaction = true;
+
+      // Addresses are 1-of-1 multisig
+      var mReq = 1;
+
+      // Addresses to generate each round
+      var nAddresses = 30;
+
+      // Set fee for miners
+      var fee = 0.0001;
+
+      // bip32 paths, defined by Copay/StartWallet
+      var basePath = 'm/45\'/2147483647';
+      var receivePath = '/0';
+      var changePath = '/1';
+
+      // Explorer URL
+      var explorerUrl = 'http://explorer.startcoin.org/';
+
+      // Array of addresses with a balance
+      var addresses = {};
+
+      $(function(){
+        // Check for a valid xprv and enable the scan button
+        // when it's been found.
+        $('#xprv').bind('input propertychange', function() {
+          var xprv = $('#xprv').val();
+          var hkey = null;
+          try {
+            hkey = new bitcore.HierarchicalKey(xprv);
+          }
+          catch (e) {
+            // Do nothing
+            $('#btnScan').prop('disabled', true);
+          }
+          if (hkey) {
+            $('#btnScan').prop('disabled', false);
+          }
+        });
+
+        // Check for a valid receive address and enable the sweep button
+        // when it's been found.
+        $('#address').bind('input propertychange', function() {
+          var address = $('#address').val();
+
+          if (bitcore.Address.validate(address)) {
+            $('#btnSweep').prop('disabled', false);
+          } else {
+            $('#btnSweep').prop('disabled', true);
+          }
+        });
+      });
+
+      // Check Insight for a balance
+      var getDetails = function(addr, callback) {
+        $.ajax({
+          url: explorerUrl + 'api/addr/' + addr.toString() + '?noTxList=1&noCache=1',
+          type: 'GET',
+          async: false
+        }).done(function(data){
+          callback(data);
+        }).error(function(xhr){
+          console.error(xhr);
+          $('#phase-1-message').text('Unable to retrieve details for address ' + addr.toString());
+          $('#phase-1-message').addClass('text-danger');
+          $('#phase-1-message').removeClass('hidden');
+        });
+      };
+
+      // Retrieve UXTOs from Insight
+      var getUtxos = function(addr, callback) {
+        $.ajax({
+          url: explorerUrl + 'api/addr/' + addr.toString() + '/utxo?noCache=1',
+          type: 'GET',
+          async: false
+        }).done(function(data){
+          callback(data);
+        }).error(function(xhr){
+          console.error(xhr);
+          $('#phase-2-message').text('Unable to retrieve UXTOs for address ' + addr.toString());
+          $('#phase-2-message').addClass('text-danger');
+          $('#phase-2-message').removeClass('hidden');
+        });
+      };
+
+      // Create XML HTTP Request
+      function createRequest() {
+        var result = null;
+        if (window.XMLHttpRequest) {
+          // FireFox, Safari, etc.
+          result = new XMLHttpRequest();
+          if (typeof result.overrideMimeType != 'undefined') {
+            result.overrideMimeType('text/xml'); // Or anything else
+          }
+        }
+        else if (window.ActiveXObject) {
+          // MSIE
+          result = new ActiveXObject("Microsoft.XMLHTTP");
+        } 
+        else {
+          // No known mechanism -- consider aborting the application
+          $('#phase-2-message').text('Unable to create HTTP request. Please use a newer browser.');
+          $('#phase-2-message').addClass('text-danger');
+          $('#phase-2-message').removeClass('hidden');
+        }
+        return result;
+      }
+
+      // Broascast sweep transaction to Insight
+      var broadcastTx = function(signedtx, callback) {
+        var req = createRequest();
+
+        req.onreadystatechange = function() {
+          // Sending...
+          if (req.readyState != 4) {
+            return;
+          }
+
+          // Error
+          if (req.status != 200) {
+            console.error(req);
+            $('#phase-2-message').text('Unable to broadcast sweep transaction (Status: ' + req.status + ')');
+            $('#phase-2-message').addClass('text-danger');
+            $('#phase-2-message').removeClass('hidden');
+            return;
+          }
+
+          // Success
+          return callback(JSON.parse(req.responseText));
+        };
+
+        req.open('POST', explorerUrl + 'api/tx/send', true);
+        req.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+        req.send('rawtx=' + signedtx);
+      };
+
+      // Scan a path
+      var scanPath = function(path, hkey, n, start) {
+        start = start || 0;
+
+        var found = false;
+
+        for (var i = start; i < (start + n); i++) {
+
+          // Derive a P2PKH address
+          var pub = hkey.derive(path + '/' + i).eckey.public;
+          var prv = hkey.derive(path + '/' + i).eckey.private;
+
+          // Make Bitcore private key object
+          var prvKey = new bitcore.PrivateKey(bitcore.networks.livenet.privKeyVersion, prv, true);
+
+          // Make an address
+          var pubkeys = []
+          var wk = new bitcore.WalletKey();
+          wk.fromObj({
+            priv: prvKey.toString()
+          });
+          pubkeys.push(wk.privKey.public);
+          
+          var addr = wk.storeObj().addr;
+
+          if (verbose) console.log(path + '/' + i + ' ' + addr.toString() + ':' + prvKey.toString());
+
+          // Create a 1-of-1 multisig address from that
+          var pubKeys = pubkeys;
+          var script = bitcore.Script.createMultisig(mReq, pubKeys);
+
+          mAddr = bitcore.Address.fromScript(script);
+
+          if (verbose) console.log('1-of-1 multisig address: ' + mAddr.toString());
+
+          // Check for a balance
+          var next = false;
+          getDetails(mAddr, function(details){
+            if (details.balance > 0) {
+              found = true;
+
+              if (verbose) console.log(mAddr.toString() + ' has a balance of ' + details.balance);
+
+              addresses[addr.toString()] = {
+                addr: mAddr,
+                script: script,
+                details: details,
+                private: prvKey,
+                public: pubKeys
+              };
+            }
+            next = true;
+          });
+
+          while (!next) {
+            // wait..
+          }
+        }
+
+        return found;
+      };
+
+      // Scan the tree for used addresses
+      var scan = function() {
+        var xprv = $('#xprv').val();
+        var hkey = new bitcore.HierarchicalKey(xprv);
+
+        // Display?
+        if (verbose) {
+          console.log('master extended private key: ' + hkey.extendedPrivateKeyString());
+          console.log('master extended public key: ' + hkey.extendedPublicKeyString());
+          console.log();
+        }
+
+        // Variable to store results in
+        var memory = {};
+
+        // Scan for addresses, both receive and change.
+        // Repeat in batches of nAddresses until nothing is found.
+        var found = false;
+        var count = 0;
+        do {
+          found = scanPath(basePath + receivePath, hkey, nAddresses, nAddresses*count) ||
+            scanPath(basePath + changePath, hkey, nAddresses, nAddresses*count);
+          count++;
+        } while (found);
+
+        if (verbose) console.log('Searched ' + count + ' rounds of ' + nAddresses + ' addresses.');
+
+        // Was anything found?
+        if (count == 1) {
+          // Show error message
+          $('#phase-1-message').html('No addresses with a balance were found.');
+          $('#phase-1-message').addClass('text-warning');
+          $('#phase-1-message').removeClass('hidden');
+        }
+        else {
+          // Hide error message
+          $('#phase-1-message').addClass('hidden');
+
+          // Disable scan button
+          $('#btnScan').prop('disabled', true);
+
+          // Enable results button
+          $('#btnShowResults').prop('disabled', false);
+
+          // Show phase 2!
+          $('#phase-2').removeClass('hidden');
+        }
+      };
+
+      // Add the results to the table and show it
+      var showResults = function() {
+        var resultsTable = $('#phase-1-results');
+        resultsTable.find("tr:gt(0)").remove();
+        $.each(addresses, function(i, address) {
+          var str = '<tr>';
+          str += '<td><a href=\"'+explorerUrl+'address/'+address.addr.toString()+'\" target=\"_blank\">'+address.addr.toString()+'</a></td>';
+          str += '<td>'+address.details.balance+' START</td>';
+          str += '</tr>';
+          resultsTable.append(str);
+        });
+
+        resultsTable.removeClass('hidden');
+        $('#btnShowResults').addClass('hidden');
+        $('#btnHideResults').removeClass('hidden');
+      };
+
+      // Hide the results table
+      var hideResults = function() {
+        $('#phase-1-results').addClass('hidden');
+        $('#btnShowResults').removeClass('hidden');
+        $('#btnHideResults').addClass('hidden');
+      }
+
+      // Sweep address balance to a specified address
+      var sweep = function() {
+
+        // Specified destination address
+        var outAddr = $('#address').val();
+
+        // TODO - this will sweep the balances one at a time
+        // This isn't ideal!
+        $.each(addresses, function(i, address) {
+          getUtxos(address.addr, function(utxos) {
+
+            // Make pubkeys object
+            var pubkeys = []
+            var wk = new bitcore.WalletKey();
+            wk.fromObj({
+              priv: address.private.toString()
+            });
+            pubkeys.push(bitcore.buffertools.toHex(wk.privKey.public));
+
+            var opts = {
+              nReq: mReq,
+              pubkeys: pubkeys,
+              fee: fee
+            };
+
+            var outs = [{
+              address: outAddr,
+              amount: (address.details.balance - fee)
+            }];
+
+            // Map the redeem script to its p2sh address
+            // https://github.com/bitpay/bitcore/issues/286
+            var hashMap = {};
+            hashMap[address.addr.toString()] = address.script.serialize();
+
+            // Build the transaction
+            var tx = (new bitcore.TransactionBuilder(opts))
+              .setUnspent(utxos)
+              .setHashToScriptMap(hashMap)
+              .setOutputs(outs)
+              .sign([address.private.toString()])
+              .build();
+
+            // Is the TX completely signed?
+            var missingSigs = tx.countInputMissingSignatures(0);
+            if (verbose) console.log('Missing signatures: ', missingSigs);
+
+            if (missingSigs == 0) {
+              var txHex = tx.serialize().toString('hex');
+
+              if (broadcastSweepTransaction) {
+                broadcastTx(txHex, function(res) {
+                  if (verbose) {
+                    console.log('Transaction: ', txHex);
+                    console.log('=> TXID: ', res.txid);
+                  }
+
+                  // Display the TXID
+                  $('#phase-2-message').html('Transaction submitted with TXID <a href=\"'+explorerUrl + '/tx/'+res.txid+'\" target=\"_blank\" title=\"View your transaction on the blockchain\">' + res.txid + '</a>.');
+                  $('#phase-2-message').addClass('text-success');
+                  $('#phase-2-message').removeClass('hidden');
+                });
+              } else {
+                $('#signedtx').text(txHex);
+                $('#signedtx-group').addClass('has-success');
+                $('#signedtx-group').removeClass('hidden');
+
+                $('#phase-2-message').text('Your signed transaction is visible below, ready for sending.');
+                $('#phase-2-message').addClass('text-success');
+                $('#phase-2-message').removeClass('hidden');
+              }
+              $('#btnSweep').prop('disabled', true);
+            }
+          });
+        });
+      };
+
+    </script>
+    <div class="container" role="main">
+       <div class="page-header">
+        <h1>StartWallet Rescue</h1>
+      </div>
+
+      <!-- No JavaScript? No luck. -->
+      <noscript class="text-danger">You must <a href="http://www.enable-javascript.com/" target="_blank" title="Learn how to enable JavaScript">enable JavaScript</a> for this page to function.</noscript>
+
+      <!-- Enter private key -->
+      <div class="row" id="phase-1">
+        <div class="col-md-12">
+          <p><strong>Phase 1.</strong> Enter your decrypted StartWallet backup in the box below.</p>
+          <p id="phase-1-message" class="hidden"></p>
+
+          <form role="form" class="">
+
+            <div class="form-group">
+              <label for="address">Master private key:</label>
+              <textarea class="form-control code" id="xprv" placeholder="Enter your private key (i.e. xprv9s21ZrQH143K3DoAuzYNVYQPzF1jYmM9WAPR9m5KWR4mQWQiabxWhwsFcgbYq4TnxLFvJcL9hk3rPYWyFVs5va8i86fqd2kKfdvJK9ybmUt)"></textarea>
+            </div>
+
+            <div class="form-group">
+              <button type="button" class="btn btn-success" id="btnScan" onclick="scan()" disabled>Scan</button>
+              <button type="button" class="btn btn-primary" id="btnShowResults" onclick="showResults()" disabled>Show Results</button>
+              <button type="button" class="btn btn-primary hidden" id="btnHideResults" onclick="hideResults()">Hide Results</button>
+            </div>
+
+          </form>
+
+          <table id="phase-1-results" class="table table-striped hidden">
+            <thead>
+              <tr>
+                <th>Address</th>
+                <th>Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Sweep to address -->
+      <div id="phase-2" class="row hidden">
+        <div class="col-md-12">
+          <hr />
+          <p><strong>Phase 2.</strong> Enter a StartCOIN address to send your coins to.</p>
+          <p id="phase-2-message" class="hidden"></p>
+
+          <form role="form" class="">
+
+            <div class="form-group">
+              <label for="address">Destination address:</label>
+              <input type="text" class="form-control code" id="address" placeholder="Address to sweep to (i.e. shCEpRzKYczDo4DfhGNzTUYzsYRgSiG7Cw)"/>
+            </div>
+
+            <div id="signedtx-group" class="form-group hidden">
+              <label for="signedtx">Signed transaction (hex):</label>
+              <textarea class="form-control code" id="signedtx" placeholder="Your signed transaction will appear here."></textarea>
+            </div>
+
+            <div class="form-group">
+              <button type="button" class="btn btn-danger" id="btnSweep" onclick="sweep();" disabled>Sweep</button>
+            </div>
+
+          </form>
+        </div>
+      </div>
+
+    </div>
+  </body>
+</html>
