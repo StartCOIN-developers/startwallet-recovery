@@ -22,6 +22,7 @@
       // Feb. 29th, 2016.
 
       // TODO - UI
+      // TODO - broadcast sweep TX
       // TODO - progress bar for scan
       // TODO - settings for how many addresses to scan for
       // TODO - intelligently scan (look for a gap of 'n')
@@ -33,6 +34,9 @@
 
       // Enable for console logging
       var verbose = false;
+
+      // Broadcast sweep transaction to blockchain
+      var broadcastSweepTransaction = true;
 
       // bip32 paths, defined by Copay/StartWallet
       var basePath = 'm/45\'/2147483647';
@@ -56,14 +60,22 @@
           }
           catch (e) {
             // Do nothing
-            $('#btnScan').prop("disabled", true);
+            $('#btnScan').prop('disabled', true);
           }
           if (hkey) {
-            $('#btnScan').prop("disabled", false);
+            $('#btnScan').prop('disabled', false);
           }
         });
 
-        $('')
+        $('#address').bind('input propertychange', function() {
+          var address = $('#address').val();
+
+          if (bitcore.Address.validate(address)) {
+            $('#btnSweep').prop('disabled', false);
+          } else {
+            $('#btnSweep').prop('disabled', true);
+          }
+        });
       });
 
       // Check Insight for a balance
@@ -93,6 +105,29 @@
         }).error(function(xhr){
           console.error(xhr);
           $('#phase-2-message').text('Unable to retrieve UXTOs for address ' + addr.toString());
+          $('#phase-2-message').addClass('text-danger');
+          $('#phase-2-message').removeClass('hidden');
+        });
+      };
+
+      // Broascast sweep transaction to Insight
+      var broadcastTx = function(signedtx, callback) {
+        console.log(explorerUrl + 'api/tx/send');
+        var params = {
+          rawtx: signedtx
+        };
+        console.log(params);
+
+        $.ajax({
+          url: explorerUrl + 'api/tx/send',
+          params: params,
+          type: 'POST',
+          async: false
+        }).done(function(data){
+          callback(data);
+        }).error(function(xhr){
+          console.error(xhr);
+          $('#phase-2-message').text('Unable to broadcast sweep transaction.');
           $('#phase-2-message').addClass('text-danger');
           $('#phase-2-message').removeClass('hidden');
         });
@@ -175,7 +210,10 @@
         scanPath(basePath + changePath, hkey, n);
 
         // Enable results button
-        $('#btnShowResults').prop("disabled", false);
+        $('#btnShowResults').prop('disabled', false);
+
+        // Disable scan button
+        $('#btnScan').prop('disabled', true);
 
         // Show phase 2!
         $('#phase-2').removeClass('hidden');
@@ -251,9 +289,34 @@
               .build();
 
             // These need to happen after .build()
-            console.log('=> Missing signatures: ', tx.countInputMissingSignatures(0));
-            var txHex = tx.serialize().toString('hex');
-            console.log('=> Transaction: ', txHex);
+            if (verbose) console.log('Missing signatures: ', tx.countInputMissingSignatures(0));
+
+            if (tx.countInputMissingSignatures(0) == 0) {
+              var txHex = tx.serialize().toString('hex');
+
+              if (broadcastSweepTransaction) {
+                broadcastTx(txHex, function(res) {
+                  if (verbose) {
+                    console.log('Transaction: ', txHex);
+                    console.log('=> TXID: ', res.txid);
+
+                    // Display the TXID
+                    $('#phase-2-message').text('Transaction submitted with TXID <a href=\"'+explorerUrl + '/tx/'+res.txid+'\" target=\"_blank\" title=\"View your transaction on the blockchain\">' + res.txid + '</a>.');
+                    $('#phase-2-message').addClass('text-success');
+                    $('#phase-2-message').removeClass('hidden');
+                  }
+                });
+              } else {
+                $('#signedtx').text(txHex);
+                $('#signedtx-group').addClass('has-success');
+                $('#signedtx-group').removeClass('hidden');
+
+                $('#phase-2-message').text('Your signed transaction is visible below, ready for sending.');
+                $('#phase-2-message').addClass('text-success');
+                $('#phase-2-message').removeClass('hidden');
+              }
+              $('#btnSweep').prop('disabled', true);
+            }
           });
         });
       };
@@ -265,7 +328,7 @@
       </div>
 
       <!-- No JavaScript? No luck. -->
-      <noscript class="text-danger">You must enable JavaScript for this page to function.</noscript>
+      <noscript class="text-danger">You must <a href="http://www.enable-javascript.com/" target="_blank" title="Learn how to enable JavaScript">enable JavaScript</a> for this page to function.</noscript>
 
       <!-- Enter private key -->
       <div class="row" id="phase-1">
@@ -315,8 +378,13 @@
               <input type="text" class="form-control" id="address" placeholder="Address to sweep to (i.e. shCEpRzKYczDo4DfhGNzTUYzsYRgSiG7Cw)"/>
             </div>
 
+            <div id="signedtx-group" class="form-group hidden">
+              <label for="signedtx">Signed transaction (hex):</label>
+              <textarea class="form-control" id="signedtx" placeholder="Your signed transaction will appear here."></textarea>
+            </div>
+
             <div class="form-group">
-              <button type="button" class="btn btn-danger" id="btnSweep" onclick="sweep();">Sweep</button>
+              <button type="button" class="btn btn-danger" id="btnSweep" onclick="sweep();" disabled>Sweep</button>
             </div>
 
           </form>
