@@ -12,6 +12,11 @@
 
     <!-- Optional theme -->
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css" integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r" crossorigin="anonymous">
+
+    <!-- Custom styles -->
+    <style>
+      .code { font-family: Consolas, Lucida Console, monospace; }
+    </style>
   </head>
   <body>
     <script src="bitcore.js"></script>
@@ -365,7 +370,7 @@
 
             <div class="form-group">
               <label for="address">Master private key:</label>
-              <textarea class="form-control" id="xprv" placeholder="Enter your private key (i.e. xprv9s21ZrQH143K3DoAuzYNVYQPzF1jYmM9WAPR9m5KWR4mQWQiabxWhwsFcgbYq4TnxLFvJcL9hk3rPYWyFVs5va8i86fqd2kKfdvJK9ybmUt)"></textarea>
+              <textarea class="form-control code" id="xprv" placeholder="Enter your private key (i.e. xprv9s21ZrQH143K3DoAuzYNVYQPzF1jYmM9WAPR9m5KWR4mQWQiabxWhwsFcgbYq4TnxLFvJcL9hk3rPYWyFVs5va8i86fqd2kKfdvJK9ybmUt)"></textarea>
             </div>
 
             <div class="form-group">
@@ -400,12 +405,12 @@
 
             <div class="form-group">
               <label for="address">Destination address:</label>
-              <input type="text" class="form-control" id="address" placeholder="Address to sweep to (i.e. shCEpRzKYczDo4DfhGNzTUYzsYRgSiG7Cw)"/>
+              <input type="text" class="form-control code" id="address" placeholder="Address to sweep to (i.e. shCEpRzKYczDo4DfhGNzTUYzsYRgSiG7Cw)"/>
             </div>
 
             <div id="signedtx-group" class="form-group hidden">
               <label for="signedtx">Signed transaction (hex):</label>
-              <textarea class="form-control" id="signedtx" placeholder="Your signed transaction will appear here."></textarea>
+              <textarea class="form-control code" id="signedtx" placeholder="Your signed transaction will appear here."></textarea>
             </div>
 
             <div class="form-group">
