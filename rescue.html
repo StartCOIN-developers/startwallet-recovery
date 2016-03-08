@@ -28,8 +28,6 @@
 
       // TODO - UI
       // TODO - progress bar for scan
-      // TODO - settings for how many addresses to scan for
-      // TODO - intelligently scan (look for a gap of 'n')
       // TODO - decode xprv from startwallet backup
 
       // Use the StartCOIN Bitcore bundle
@@ -37,10 +35,19 @@
       var bitcore = require('bitcore');
 
       // Enable for console logging
-      var verbose = true;
+      var verbose = false;
 
       // Broadcast sweep transaction to blockchain
       var broadcastSweepTransaction = true;
+
+      // Addresses are 1-of-1 multisig
+      var mReq = 1;
+
+      // Addresses to generate each round
+      var nAddresses = 30;
+
+      // Set fee for miners
+      var fee = 0.0001;
 
       // bip32 paths, defined by Copay/StartWallet
       var basePath = 'm/45\'/2147483647';
@@ -164,8 +171,12 @@
       };
 
       // Scan a path
-      var scanPath = function(path, hkey, n) {
-        for (var i = 0; i < n; i++) {
+      var scanPath = function(path, hkey, n, start) {
+        start = start || 0;
+
+        var found = false;
+
+        for (var i = start; i < n; i++) {
 
           // Derive a P2PKH address
           var pub = hkey.derive(path + '/' + i).eckey.public;
@@ -187,18 +198,19 @@
           if (verbose) console.log('#' + i + ' ' + addr.toString() + ':' + prvKey.toString());
 
           // Create a 1-of-1 multisig address from that
-          var mReq = 1;
-          var pubKeys = pubkeys; //[pub];
+          var pubKeys = pubkeys;
           var script = bitcore.Script.createMultisig(mReq, pubKeys);
+
           mAddr = bitcore.Address.fromScript(script);
 
-          // mAddr = bitcore.Address.fromPubKeys(1, [pub]);
           if (verbose) console.log('1-of-1 multisig address: ' + mAddr.toString());
 
           // Check for a balance
           var next = false;
           getDetails(mAddr, function(details){
             if (details.balance > 0) {
+              found = true;
+
               if (verbose) console.log(mAddr.toString() + ' has a balance of ' + details.balance);
 
               addresses[addr.toString()] = {
@@ -216,6 +228,8 @@
             // wait..
           }
         }
+
+        return found;
       };
 
       // Scan the tree for used addresses
@@ -233,20 +247,34 @@
         // Variable to store results in
         var memory = {};
 
-        // How many address to check for?
-        var n = 30;
+        // Scan for addresses, both receive and change.
+        // Repeat in batches of nAddresses until nothing is found.
+        var found = false;
+        var count = 0;
+        do {
+          found = scanPath(basePath + receivePath, hkey, nAddresses) ||
+            scanPath(basePath + changePath, hkey, nAddresses);
+          count++;
+        } while (found);
 
-        scanPath(basePath + receivePath, hkey, n);
-        scanPath(basePath + changePath, hkey, n);
+        if (verbose) console.log('Searched ' + count + ' rounds of ' + nAddresses + ' addresses.');
 
-        // Enable results button
-        $('#btnShowResults').prop('disabled', false);
+        // Was anything found?
+        if (Object.keys(memory).length == 0) {
+          $('#phase-1-message').html('No addresses with a balance were found.');
+          $('#phase-1-message').addClass('text-warning');
+          $('#phase-1-message').removeClass('hidden');
+        }
+        else {
+          // Disable scan button
+          $('#btnScan').prop('disabled', true);
 
-        // Disable scan button
-        $('#btnScan').prop('disabled', true);
+          // Enable results button
+          $('#btnShowResults').prop('disabled', false);
 
-        // Show phase 2!
-        $('#phase-2').removeClass('hidden');
+          // Show phase 2!
+          $('#phase-2').removeClass('hidden');
+        }
       };
 
       // Add the results to the table and show it
@@ -283,8 +311,6 @@
         // This isn't ideal!
         $.each(addresses, function(i, address) {
           getUtxos(address.addr, function(utxos) {
-            // Set fee for miners
-            var fee = 0.0001;
 
             // Make pubkeys object
             var pubkeys = []
@@ -295,7 +321,7 @@
             pubkeys.push(bitcore.buffertools.toHex(wk.privKey.public));
 
             var opts = {
-              nReq: 1,
+              nReq: mReq,
               pubkeys: pubkeys,
               fee: fee
             };
@@ -318,10 +344,11 @@
               .sign([address.private.toString()])
               .build();
 
-            // These need to happen after .build()
-            if (verbose) console.log('Missing signatures: ', tx.countInputMissingSignatures(0));
+            // Is the TX completely signed?
+            var missingSigs = tx.countInputMissingSignatures(0);
+            if (verbose) console.log('Missing signatures: ', missingSigs);
 
-            if (tx.countInputMissingSignatures(0) == 0) {
+            if (missingSigs == 0) {
               var txHex = tx.serialize().toString('hex');
 
               if (broadcastSweepTransaction) {
@@ -329,12 +356,12 @@
                   if (verbose) {
                     console.log('Transaction: ', txHex);
                     console.log('=> TXID: ', res.txid);
-
-                    // Display the TXID
-                    $('#phase-2-message').html('Transaction submitted with TXID <a href=\"'+explorerUrl + '/tx/'+res.txid+'\" target=\"_blank\" title=\"View your transaction on the blockchain\">' + res.txid + '</a>.');
-                    $('#phase-2-message').addClass('text-success');
-                    $('#phase-2-message').removeClass('hidden');
                   }
+
+                  // Display the TXID
+                  $('#phase-2-message').html('Transaction submitted with TXID <a href=\"'+explorerUrl + '/tx/'+res.txid+'\" target=\"_blank\" title=\"View your transaction on the blockchain\">' + res.txid + '</a>.');
+                  $('#phase-2-message').addClass('text-success');
+                  $('#phase-2-message').removeClass('hidden');
                 });
               } else {
                 $('#signedtx').text(txHex);
