@@ -35,7 +35,7 @@
       var bitcore = require('bitcore');
 
       // Enable for console logging
-      var verbose = true;
+      var verbose = false;
 
       // Broadcast sweep transaction to blockchain
       var broadcastSweepTransaction = true;
@@ -50,7 +50,8 @@
       var fee = 0.0001;
 
       // bip32 paths, defined by Copay/StartWallet
-      var basePath = 'm/45\'/2147483647';
+      var basePath = 'm/45\'';
+      var copayPath = '/2147483647';
       var receivePath = '/0';
       var changePath = '/1';
 
@@ -253,13 +254,22 @@
 
         // Scan for addresses, both receive and change.
         // Repeat in batches of nAddresses until nothing is found.
-        var found = false;
+        var foundOld = false;
+        var foundNew = false;
         var count = 0;
         do {
-          found = scanPath(basePath + receivePath, hkey, nAddresses, nAddresses*count) ||
-            scanPath(basePath + changePath, hkey, nAddresses, nAddresses*count);
+          // Scan old path format
+          for (var i = 0; i < mReq; i++) {
+            foundOld =
+              scanPath(basePath + '/' + i + changePath, hkey, nAddresses, nAddresses*count) ||
+              scanPath(basePath + '/' + i + receivePath, hkey, nAddresses, nAddresses*count);
+          }
+          // Scan new path format
+          foundNew =
+            scanPath(basePath + copayPath + changePath, hkey, nAddresses, nAddresses*count) ||
+            scanPath(basePath + copayPath + receivePath, hkey, nAddresses, nAddresses*count);
           count++;
-        } while (found);
+        } while (foundOld || foundNew);
 
         if (verbose) console.log('Searched ' + count + ' rounds of ' + nAddresses + ' addresses.');
 
