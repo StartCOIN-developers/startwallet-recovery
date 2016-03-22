@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>StartWallet Rescue v2</title>
+
+    <link rel="stylesheet" href="./css/main.css">
+    <link rel="stylesheet" href="./css/icons.css">
+    <link rel="stylesheet" href="./css/foundation-icons.css">
+    <link rel="stylesheet" href="./css/copay.min.css">
+    <link rel="stylesheet" href="./css/vendor.min.css">
+
+    </head>
+    <body>
+      <div class="page">
+        <div class="off-canvas-wrap">
+          <div class="inner-wrap">
+            <div class="home">
+              <section>
+                <div class="large-5 large-centered medium-7 medium-centered columns">
+                <div class="logo-setup">
+                  <img src="https://startwallet.com/img/logo-negative.png" alt="Copay">
+                </div>
+
+                <div id="note-success" class="box-notification none">
+                    <div class="box-icon">
+                      <i class="fi-check size-24"></i>
+                    </div>
+                    <div class="text-success size-14">
+                      <h3>Your coins were rescued!</h3>
+                      <span>They're on their way to your wallet now.</span>
+                    </div>
+                  </div>
+
+
+                <div id="note-error" class="box-notification none">
+                  <div class="box-icon error">
+                    <i class="fi-x size-24"></i>
+                  </div>
+                  <span class="text-warning size-14">
+                    <h3>Incorrect Key</h3>
+                    <span>The Master Private Key you entered was incorrect.</span>
+                  </span>
+                </div>
+
+                <div id="settings" class="">
+                  <form name="settingsForm">
+
+                    <fieldset>
+                      <legend>StartCOIN Explorer</legend>
+                      <div class="row collapse">
+                        <label class="left" for="explorerUrl">StartCOIN Explorer URL</label>
+                        <div class="has-error right size-12">
+                          <span class="icon-input"><i class="fi-x"></i></span>
+                          <span>Not valid</span>
+                        </div>
+                      </div>
+                      <div class="input">
+                        <input type="text" id="explorerUrl" name="explorerUrl" class="form-control" required="true" placeholder="Explorer URL">
+                        <i class="fi-link"></i>
+                      </div>
+
+                      <small class="text-gray">
+                        This is the service used by StartWallet Rescue to check address balances and to broadcast signed transactions. StartCOIN Explorer is open-source software. You can run your own instances (see 
+                        <a href="https://github.com/startcoin-project/insight-api" target="_blank">GitHub</a>).
+                      </small>
+                    </fieldset>
+
+                    <fieldset>
+                      <legend>Scanning</legend>
+                      <div class="row collapse">
+                        <label class="left" for="addresses">Addresses</label>
+                        <div class="has-error right size-12">
+                          <span class="icon-input"><i class="fi-x"></i></span>
+                          <span>Not valid</span>
+                        </div>
+                      </div>
+                      <div class="input">
+                        <input type="text" id="addresses" name="addresses" class="form-control" required="true" placeholder="Addresses to Scan">
+                        <i class="fi-magnifying-glass"></i>
+                      </div>
+
+                      <small class="text-gray">
+                        The number of addresses to scan at each round. If no address with a balance is found in a round StartWallet Rescue finishes searching. A high value may find more addresses but will take longer to run.</small>
+
+                      <div class="row collapse">
+                        <label class="left" for="addresses">Scan only?</label>
+                      </div>
+                      <div class="input">
+                        <input type="checkbox" id="scanonly" name="scanonly" value="true" class="form-control">
+                      </div>
+                    </fieldset>
+
+                    <button type="submit" class="button primary radius expand m0">Save</button>
+                  </form>
+
+                  <div class="box-setup-footer">
+                    <div class="right">
+                      <a class="button outline dark-gray tiny">
+                        <i class="fi-page-delete show-for-large-up size-14"></i> 
+                        <span>Reset Settings</span>
+                      </a>
+                    </div>
+
+                    <div class="left m10r">
+                      <a class="button outline dark-gray tiny ng-click-active">
+                        <i class="fi-arrow-left show-for-large-up size-14"></i> 
+                        <span>Back</span>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+
+                <div id="phase1" class="none">
+                  <form name="phase1Form">
+                    <div class="input">
+                        <input type="text" class="form-control" name="xprv" name="xprv" placeholder="Master Private Key" required="true">
+                        <i class="fi-key"></i>
+                      </div>
+
+                      <div class="input">
+                        <input type="text" class="form-control" id="address" name="address" placeholder="Destination Address" required="true">
+                        <i class="icon-paperplane"></i>
+                      </div>
+                    
+                    <button type="submit" class="button primary radius expand m0" disabled="disabled">
+                        Rescue Coins
+                      </button>
+                  </form>
+
+                  <div class="box-setup-footer">
+                    <div class="right">
+                      <a class="button outline dark-gray tiny">
+                        <i class="icon-wrench show-for-large-up size-14"></i> 
+                        <span>Settings</span>
+                      </a>
+                    </div>
+
+                    <div class="left m10r">
+                      <a class="button outline dark-gray tiny ng-click-active">
+                        <i class="icon-reference show-for-large-up size-14"></i> 
+                        <span>Help</span>
+                      </a>
+                    </div>
+
+                    <div class="left">
+                      <a class="button outline dark-gray tiny">
+                        <i class="icon-email show-for-large-up size-14"></i> 
+                        <span>Contact Us</span>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="extra-margin-bottom"></div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+    </body>
+</html>
