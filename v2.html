@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,156 +11,368 @@
     <link rel="stylesheet" href="./css/main.css">
     <link rel="stylesheet" href="./css/icons.css">
     <link rel="stylesheet" href="./css/foundation-icons.css">
-    <link rel="stylesheet" href="./css/copay.min.css">
     <link rel="stylesheet" href="./css/vendor.min.css">
+    <link rel="stylesheet" href="./css/copay.min.css">
+    <link rel="stylesheet" href="./css/switch.css">
 
-    </head>
-    <body>
-      <div class="page">
-        <div class="off-canvas-wrap">
-          <div class="inner-wrap">
-            <div class="home">
-              <section>
-                <div class="large-5 large-centered medium-7 medium-centered columns">
-                <div class="logo-setup">
-                  <img src="https://startwallet.com/img/logo-negative.png" alt="Copay">
+    <!-- <script type="text/javascript" src="./js/jquery-1.12.2.min.js"></script> -->
+    <script src="https://code.jquery.com/jquery-2.2.2.min.js" integrity="sha256-36cp2Co+/62rEAAYHLmRCPIych47CvdM+uTBJwSzWjI=" crossorigin="anonymous"></script>
+    <script src="./bitcore.js"></script>
+
+  </head>
+  <body>
+
+    <script type="text/javascript">
+      var settings = {
+        // StartCOIN Insight API instance to use
+        explorerUrl: 'http://explorer.startcoin.org/',
+
+        // Addresses to generate each round
+        nAddresses: 30,
+
+        // Only scan the blockchain or broadcast retrieve tx?
+        scanOnly: false,
+
+        // Set fee for miners
+        fee: 0.0001
+      };
+
+      // Use the StartCOIN Bitcore bundle
+      // This was taken from git://github.com/startcoin-project/bitcore.git#1a5c0c3d424a090f4709897a7e103545345529da and build using "npm install"
+      var bitcore = require('bitcore');
+
+      // bip32 paths, defined by Copay/StartWallet
+      var basePath = 'm/45\'';
+      var copayPath = '/2147483647';
+      var receivePath = '/0';
+      var changePath = '/1';
+
+      // Array of addresses with a balance
+      var addresses = {};
+
+      function resetSettings() {
+        $('#explorerUrl').val(settings.explorerUrl);
+        $('#naddresses').val(settings.nAddresses);
+        $('#scanonly').prop('checked', settings.scanOnly);
+        $('#fee').val(settings.fee);
+      };
+
+      function showSettings(){
+        $('#phase1').addClass('none');
+        $('#settings').removeClass('none');
+      };
+
+      function showHelp(){
+        $('#phase1').addClass('none');
+        $('#help').removeClass('none');
+      };
+
+      function showContact(){
+        $('#phase1').addClass('none');
+        $('#contact').removeClass('none');
+      };
+
+      function showPhase1(){
+        $('#settings').addClass('none');
+        $('#help').addClass('none');
+        $('#contact').addClass('none');
+        $('#phase1').removeClass('none');
+      };
+
+      function successMessage(title, text) {
+        $('#note-success-title').text(title);
+        $('#note-success-text').text(text);
+        $('#note-success').removeClass('none');
+      };
+
+      function errorMessage(title, text) {
+        $('#note-error-title').text(title);
+        $('#note-error-text').text(text);
+        $('#note-error').removeClass('none');
+      };
+
+      function validMasterPrivateKey(xprv) {
+        var xprv = xprv || $('#xprv').val();
+        var hkey = null;
+        try {
+          hkey = new bitcore.HierarchicalKey(xprv);
+        }
+        catch (e) {
+          return false;
+        }
+        if (hkey) {
+          return true;
+        }
+        return false;
+      };
+
+      $(function(){
+        // Reset settings to default
+        resetSettings();
+
+        // Set up button handlers
+        $('#btnSettingsBack').click(showPhase1);
+        $('#btnSettingsReset').click(resetSettings);
+
+        $('#btnHelpBack').click(showPhase1);
+
+        $('#btnContactBack').click(showPhase1);
+
+        $('#btnPhase1Help').click(showHelp);
+        $('#btnPhase1Contact').click(showContact);
+        $('#btnPhase1Settings').click(showSettings);
+
+        // Check for a valid xprv and enable the scan button
+        // when it's been found.
+        $('#xprv').bind('input propertychange', function() {
+          if (validMasterPrivateKey()) {
+            $('#btnRescue').prop('disabled', false);
+          }
+          else {
+            $('#btnRescue').prop('disabled', true);
+          }
+        });
+
+        // // Check for a valid receive address and enable the sweep button
+        // // when it's been found.
+        $('#address').bind('input propertychange', function() {
+          var address = $('#address').val();
+
+          if (address === '') {
+            if (validMasterPrivateKey()) {
+              $('#btnRescue').prop('disabled', false);
+            }
+            else {
+              $('#btnRescue').prop('disabled', true);
+            }
+          }
+          else {
+            if (bitcore.Address.validate(address)) {
+              $('#btnRescue').prop('disabled', false);
+            } else {
+              $('#btnRescue').prop('disabled', true);
+            }
+          }
+        });
+      });
+    </script>
+
+    <div class="page">
+      <div class="off-canvas-wrap">
+        <div class="inner-wrap">
+          <div class="home">
+            <section>
+              <div class="large-5 large-centered medium-7 medium-centered columns">
+              <div class="logo-setup">
+                <img src="https://startwallet.com/img/logo-negative.png" alt="Copay">
+              </div>
+
+              <!-- Notification boxes -->
+              <div id="note-success" class="box-notification none">
+                <div class="box-icon">
+                  <i class="fi-check size-24"></i>
                 </div>
-
-                <div id="note-success" class="box-notification none">
-                    <div class="box-icon">
-                      <i class="fi-check size-24"></i>
-                    </div>
-                    <div class="text-success size-14">
-                      <h3>Your coins were rescued!</h3>
-                      <span>They're on their way to your wallet now.</span>
-                    </div>
-                  </div>
-
-
-                <div id="note-error" class="box-notification none">
-                  <div class="box-icon error">
-                    <i class="fi-x size-24"></i>
-                  </div>
-                  <span class="text-warning size-14">
-                    <h3>Incorrect Key</h3>
-                    <span>The Master Private Key you entered was incorrect.</span>
-                  </span>
+                <div class="text-success size-14">
+                  <h3 id="note-success-title">Your coins were rescued!</h3>
+                  <span id="note-success-text">They're on their way to your wallet now.</span>
                 </div>
+              </div>
 
-                <div id="settings" class="">
-                  <form name="settingsForm">
-
-                    <fieldset>
-                      <legend>StartCOIN Explorer</legend>
-                      <div class="row collapse">
-                        <label class="left" for="explorerUrl">StartCOIN Explorer URL</label>
-                        <div class="has-error right size-12">
-                          <span class="icon-input"><i class="fi-x"></i></span>
-                          <span>Not valid</span>
-                        </div>
-                      </div>
-                      <div class="input">
-                        <input type="text" id="explorerUrl" name="explorerUrl" class="form-control" required="true" placeholder="Explorer URL">
-                        <i class="fi-link"></i>
-                      </div>
-
-                      <small class="text-gray">
-                        This is the service used by StartWallet Rescue to check address balances and to broadcast signed transactions. StartCOIN Explorer is open-source software. You can run your own instances (see 
-                        <a href="https://github.com/startcoin-project/insight-api" target="_blank">GitHub</a>).
-                      </small>
-                    </fieldset>
-
-                    <fieldset>
-                      <legend>Scanning</legend>
-                      <div class="row collapse">
-                        <label class="left" for="addresses">Addresses</label>
-                        <div class="has-error right size-12">
-                          <span class="icon-input"><i class="fi-x"></i></span>
-                          <span>Not valid</span>
-                        </div>
-                      </div>
-                      <div class="input">
-                        <input type="text" id="addresses" name="addresses" class="form-control" required="true" placeholder="Addresses to Scan">
-                        <i class="fi-magnifying-glass"></i>
-                      </div>
-
-                      <small class="text-gray">
-                        The number of addresses to scan at each round. If no address with a balance is found in a round StartWallet Rescue finishes searching. A high value may find more addresses but will take longer to run.</small>
-
-                      <div class="row collapse">
-                        <label class="left" for="addresses">Scan only?</label>
-                      </div>
-                      <div class="input">
-                        <input type="checkbox" id="scanonly" name="scanonly" value="true" class="form-control">
-                      </div>
-                    </fieldset>
-
-                    <button type="submit" class="button primary radius expand m0">Save</button>
-                  </form>
-
-                  <div class="box-setup-footer">
-                    <div class="right">
-                      <a class="button outline dark-gray tiny">
-                        <i class="fi-page-delete show-for-large-up size-14"></i> 
-                        <span>Reset Settings</span>
-                      </a>
-                    </div>
-
-                    <div class="left m10r">
-                      <a class="button outline dark-gray tiny ng-click-active">
-                        <i class="fi-arrow-left show-for-large-up size-14"></i> 
-                        <span>Back</span>
-                      </a>
-                    </div>
-                  </div>
+              <div id="note-error" class="box-notification none">
+                <div class="box-icon error">
+                  <i class="fi-x size-24"></i>
                 </div>
+                <span class="text-warning size-14">
+                  <h3 id="note-error-title">Incorrect Key</h3>
+                  <span id="note-error-title">The Master Private Key you entered was incorrect.</span>
+                </span>
+              </div>
+              <!-- End of Notification boxes -->
 
-                <div id="phase1" class="none">
-                  <form name="phase1Form">
+              <!-- Settings page -->
+              <div id="settings" class="settings none">
+                <form name="settingsForm">
+
+                <h2>Settings</h2>
+                  <fieldset>
+                    <legend>StartCOIN Explorer</legend>
+                    <div class="row collapse">
+                      <label class="left" for="explorerUrl">StartCOIN Explorer URL</label>
+                      <div id="settings-explorer-error" class="has-error right size-12 none">
+                        <span class="icon-input"><i class="fi-x"></i></span>
+                        <span>Not valid</span>
+                      </div>
+                    </div>
                     <div class="input">
-                        <input type="text" class="form-control" name="xprv" name="xprv" placeholder="Master Private Key" required="true">
-                        <i class="fi-key"></i>
+                      <input type="text" id="explorerUrl" name="explorerUrl" class="form-control" required="true" placeholder="Explorer URL">
+                      <i class="fi-link"></i>
+                    </div>
+
+                    <small class="text-gray">
+                      This is the service used by StartWallet Rescue to check address balances and to broadcast signed transactions. StartCOIN Explorer is open-source software. You can run your own instances (see 
+                      <a href="https://github.com/startcoin-project/insight-api" target="_blank">GitHub</a>).
+                    </small>
+                  </fieldset>
+
+                  <fieldset>
+                    <legend>Scanning</legend>
+                    <div class="row collapse">
+                      <label class="left" for="naddresses">Addresses</label>
+                      <div id="settings-naddresses-error" class="has-error right size-12 none">
+                        <span class="icon-input"><i class="fi-x"></i></span>
+                        <span>Not valid</span>
                       </div>
+                    </div>
+                    <div class="input">
+                      <input type="text" id="naddresses" name="naddresses" class="form-control" required="true" placeholder="Addresses to Scan">
+                      <i class="fi-magnifying-glass"></i>
+                    </div>
 
-                      <div class="input">
-                        <input type="text" class="form-control" id="address" name="address" placeholder="Destination Address" required="true">
-                        <i class="icon-paperplane"></i>
+                    <small class="text-gray">
+                      The number of addresses to scan at each round. If no address with a balance is found in a round StartWallet Rescue finishes searching. A high value may find more addresses but will take longer to run.</small>
+                  </fieldset>
+
+                  <fieldset>
+                    <legend>Retrieval</legend>
+
+                    <div class="row collapse">
+                      <label class="left" for="fee">Fee</label>
+                      <div id="settings-fee-error" class="has-error right size-12 none">
+                        <span class="icon-input"><i class="fi-x"></i></span>
+                        <span>Not valid</span>
                       </div>
-                    
-                    <button type="submit" class="button primary radius expand m0" disabled="disabled">
-                        Rescue Coins
-                      </button>
-                  </form>
-
-                  <div class="box-setup-footer">
-                    <div class="right">
-                      <a class="button outline dark-gray tiny">
-                        <i class="icon-wrench show-for-large-up size-14"></i> 
-                        <span>Settings</span>
-                      </a>
+                    </div>
+                    <div class="input">
+                      <input type="text" id="fee" name="fee" class="form-control" required="true" placeholder="Transaction Fee">
+                      <i class="fi-bitcoin"></i>
                     </div>
 
-                    <div class="left m10r">
-                      <a class="button outline dark-gray tiny ng-click-active">
-                        <i class="icon-reference show-for-large-up size-14"></i> 
-                        <span>Help</span>
-                      </a>
+                    <div class="row collapse">
+                      <label class="left" for="scanonly">Scan only?</label>
+                    </div>
+                    <div>
+                      <label class="switch-light switch-candy" onclick="">
+                        <input type="checkbox" name="scanonly" id="scanonly">
+                        <span>
+                          <span>Off</span>
+                          <span>On</span>
+                          <a></a>
+                        </span>
+                      </label>
                     </div>
 
-                    <div class="left">
-                      <a class="button outline dark-gray tiny">
-                        <i class="icon-email show-for-large-up size-14"></i> 
-                        <span>Contact Us</span>
-                      </a>
-                    </div>
+                    <small class="text-gray">
+                      StartWallet Rescue can be set to scan for balances or to sign a transaction sweeping them to a specified destination address.</small>
+                  </fieldset>
+
+                  <button type="submit" class="button primary radius expand m0">Save</button>
+                </form>
+
+                <div class="box-setup-footer">
+                  <div class="right">
+                    <a id="btnSettingsReset" class="button outline dark-gray tiny">
+                      <i class="fi-page-delete show-for-large-up size-14"></i> 
+                      <span>Reset Settings</span>
+                    </a>
+                  </div>
+
+                  <div class="left m10r">
+                    <a id="btnSettingsBack" class="button outline dark-gray tiny ng-click-active">
+                      <i class="fi-arrow-left show-for-large-up size-14"></i> 
+                      <span>Back</span>
+                    </a>
                   </div>
                 </div>
               </div>
-              <div class="extra-margin-bottom"></div>
-            </section>
-          </div>
+              <!-- End of Settings page -->
+
+              <!-- Help page -->
+              <div id="help" class="none">
+                <div class="text-gray">
+                  <p>This tool was created to help users retrieve funds stuck in at <a href="https://startwallet.com/" target="_blank" title="Click here to go to StartWallet">StartWallet.com</a>.</p>
+
+                  <p>To retrieve your coins you will need your master private key. You can find this by logging into your account at StartWallet and navigating to <a href="https://startwallet.com/#!/moreSettings" target="_blank" title="Click here to go to your StartWallet settings">Settings</a>, clicking "Show advanced options" and then clicking the button that says "Show" beneath the heading "Master Private Key".</p>
+
+                  <p>You will also need a StartCOIN address to send your coins to. You can generate an address by downloading the StartCOIN desktop client from <a href="https://www.startcoin.org/#wallet" target="_blank" title="Click here to go to the StartCOIN download page">here</a>. Once you have installed the wallet click the "Receive" tab to find your addresses.</p>
+                </div>
+
+                <div class="box-setup-footer">
+                  <div class="left m10r">
+                    <a id="btnHelpBack" class="button outline dark-gray tiny ng-click-active">
+                      <i class="fi-arrow-left show-for-large-up size-14"></i> 
+                      <span>Back</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
+              <!-- End of Help page -->
+
+              <!-- Contact page -->
+              <div id="contact" class="none">
+                <div class="text-gray">
+                  <p>To contact the StartCOIN team you can email <a href="mailto:grace@startjoin.com" target="_blank" title="Click to email Grace at StartCOIN">Grace</a> or tweet to <a href="https://twitter.com/start_coin" target="_blank" title="Click here to tweet to @start_coin">@start_coin</a>.</p>
+                </div>
+
+                <div class="box-setup-footer">
+                  <div class="left m10r">
+                    <a id="btnContactBack" class="button outline dark-gray tiny ng-click-active">
+                      <i class="fi-arrow-left show-for-large-up size-14"></i> 
+                      <span>Back</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
+              <!-- End of Contact page -->
+
+              <!-- Home (Phase 1) page -->
+              <div id="phase1" class="">
+                <form name="phase1Form">
+                  <div class="input">
+                      <input type="text" class="form-control" id="xprv" name="xprv" placeholder="Master Private Key" required="true">
+                      <i class="fi-key"></i>
+                    </div>
+
+                    <div class="input">
+                      <input type="text" class="form-control" id="address" name="address" placeholder="Destination Address (optional)">
+                      <i class="icon-paperplane"></i>
+                    </div>
+                  
+                  <button id="btnRescue" type="button" class="button primary radius expand m0" disabled="disabled">
+                      Rescue Coins
+                    </button>
+                </form>
+
+                <div class="box-setup-footer">
+                  <div class="right">
+                    <a id="btnPhase1Settings" class="button outline dark-gray tiny">
+                      <i class="icon-wrench show-for-large-up size-14"></i> 
+                      <span>Settings</span>
+                    </a>
+                  </div>
+
+                  <div class="left m10r">
+                    <a id="btnPhase1Help" class="button outline dark-gray tiny ng-click-active">
+                      <i class="icon-reference show-for-large-up size-14"></i> 
+                      <span>Help</span>
+                    </a>
+                  </div>
+
+                  <div class="left">
+                    <a id="btnPhase1Contact" class="button outline dark-gray tiny">
+                      <i class="icon-email show-for-large-up size-14"></i> 
+                      <span>Contact Us</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
+              <!-- End of Home page -->
+
+            </div>
+            <div class="extra-margin-bottom"></div>
+          </section>
         </div>
       </div>
     </div>
-    </body>
+
+  </body>
 </html>
