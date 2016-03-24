@@ -23,6 +23,7 @@
   <body>
 
     <script type="text/javascript">
+
       var settings = {
         // StartCOIN Insight API instance to use
         explorerUrl: 'http://explorer.startcoin.org/',
@@ -34,7 +35,13 @@
         scanOnly: false,
 
         // Set fee for miners
-        fee: 0.0001
+        fee: 0.0001,
+
+        // Number of required signers
+        mReq: 1,
+
+        // Logging output?
+        verbose: true
       };
 
       // Use the StartCOIN Bitcore bundle
@@ -42,10 +49,12 @@
       var bitcore = require('bitcore');
 
       // bip32 paths, defined by Copay/StartWallet
-      var basePath = 'm/45\'';
-      var copayPath = '/2147483647';
-      var receivePath = '/0';
-      var changePath = '/1';
+      var bip32 = {
+        basePath: 'm/45\'',
+        copayPath: '/2147483647',
+        receivePath: '/0',
+        changePath: '/1'
+      };
 
       // Array of addresses with a balance
       var addresses = {};
@@ -106,6 +115,134 @@
         return false;
       };
 
+      var getDetails = function(addr, callback) {
+        $.ajax({
+          url: settings.explorerUrl + 'api/addr/' + addr.toString() + '?noTxList=1&noCache=1',
+          type: 'GET',
+          async: false
+        }).done(function(data){
+          callback(data);
+        }).error(function(xhr){
+          console.error(xhr);
+          errorMessage('Cannot contact explorer', 'Unable to retrieve details for address ' + addr.toString() + '.')
+        });
+      };
+
+      function scanPath(path, hkey, n, start) {
+        start = start || 0;
+
+        var found = false;
+
+        for (var i = start; i < (start + n); i++) {
+
+          // Derive a P2PKH address
+          var pub = hkey.derive(path + '/' + i).eckey.public;
+          var prv = hkey.derive(path + '/' + i).eckey.private;
+
+          // Make Bitcore private key object
+          var prvKey = new bitcore.PrivateKey(bitcore.networks.livenet.privKeyVersion, prv, true);
+
+          // Make an address
+          var pubkeys = []
+          var wk = new bitcore.WalletKey();
+          wk.fromObj({
+            priv: prvKey.toString()
+          });
+          pubkeys.push(wk.privKey.public);
+          
+          var addr = wk.storeObj().addr;
+
+          if (settings.verbose) console.log(path + '/' + i + ' ' + addr.toString() + ':' + prvKey.toString());
+
+          // Create a 1-of-1 multisig address from that
+          var pubKeys = pubkeys;
+          var script = bitcore.Script.createMultisig(settings.mReq, pubKeys);
+
+          mAddr = bitcore.Address.fromScript(script);
+
+          if (settings.verbose) console.log('1-of-1 multisig address: ' + mAddr.toString());
+
+          // Check for a balance
+          var next = false;
+          getDetails(mAddr, function(details){
+            if (details.balance > 0) {
+              found = true;
+
+              if (settings.verbose) console.log(mAddr.toString() + ' has a balance of ' + details.balance);
+
+              addresses[addr.toString()] = {
+                addr: mAddr,
+                script: script,
+                details: details,
+                private: prvKey,
+                public: pubKeys
+              };
+            }
+            next = true;
+          });
+
+          while (!next) {
+            // wait..
+          }
+        }
+
+        return found;
+      };
+
+      function scan() {
+        // Transit to phase 2
+        // TODO
+
+        var xprv = $('#xprv').val();
+        var hkey = new bitcore.HierarchicalKey(xprv);
+
+        // Display?
+        if (settings.verbose) {
+          console.log('Master extended private key: ' + hkey.extendedPrivateKeyString());
+          console.log('Master extended public key: ' + hkey.extendedPublicKeyString());
+          console.log();
+        }
+
+        // Variable to store results in
+        var memory = {};
+
+        // Get the number of addresses in each round
+        var nAddresses = parseInt($('#naddresses').val());
+
+        // Scan for addresses, both receive and change.
+        // Repeat in batches of nAddresses until nothing is found.
+        var foundOld = false;
+        var foundNew = false;
+        var count = 0;
+        do {
+          // Scan old path format
+          for (var i = 0; i < settings.mReq; i++) {
+            foundOld =
+              scanPath(bip32.basePath + '/' + i + bip32.changePath, hkey, nAddresses, nAddresses*count) ||
+              scanPath(bip32.basePath + '/' + i + bip32.receivePath, hkey, nAddresses, nAddresses*count);
+          }
+
+          // Scan new path format
+          foundNew =
+            scanPath(bip32.basePath + bip32.copayPath + bip32.changePath, hkey, nAddresses, nAddresses*count) ||
+            scanPath(bip32.basePath + bip32.copayPath + bip32.receivePath, hkey, nAddresses, nAddresses*count);
+
+          count++;
+        } while (foundOld || foundNew);
+
+        if (settings.verbose) console.log('Searched ' + count + ' rounds of ' + nAddresses + ' addresses.');
+
+        // Was anything found?
+        if (count == 1) {
+          // Show error message
+          errorMessage('No addresses found', 'We were unable to find any addresses with a balance.')
+        }
+        else {
+          // TODO - show results
+          successMessage('Success', 'We found some addresses with a balance.');
+        }
+      };
+
       $(function(){
         // Reset settings to default
         resetSettings();
@@ -122,7 +259,9 @@
         $('#btnPhase1Contact').click(showContact);
         $('#btnPhase1Settings').click(showSettings);
 
-        // Check for a valid xprv and enable the scan button
+        $('#btnRescue').click(scan);
+
+        // Check for a valid xprv and enable the rescue button
         // when it's been found.
         $('#xprv').bind('input propertychange', function() {
           if (validMasterPrivateKey()) {
@@ -133,8 +272,9 @@
           }
         });
 
-        // // Check for a valid receive address and enable the sweep button
-        // // when it's been found.
+        // Check for a valid receive address.
+        // Disable the rescue button if it's enabled and an incorrect
+        // address has been entered.
         $('#address').bind('input propertychange', function() {
           var address = $('#address').val();
 
@@ -184,7 +324,7 @@
                 </div>
                 <span class="text-warning size-14">
                   <h3 id="note-error-title">Incorrect Key</h3>
-                  <span id="note-error-title">The Master Private Key you entered was incorrect.</span>
+                  <span id="note-error-text">The Master Private Key you entered was incorrect.</span>
                 </span>
               </div>
               <!-- End of Notification boxes -->
