@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="./css/vendor.min.css">
     <link rel="stylesheet" href="./css/copay.min.css">
     <link rel="stylesheet" href="./css/switch.css">
+    <link rel="stylesheet" href="./css/jquery-ui.min.css">
 
     <style>
       .title-text {
@@ -25,18 +26,35 @@
       .settings {
         padding-top: 0 !important;
       }
+
+      .home input[type="number"] {
+        padding-left: 45px;
+      }
+
+      /* jQuery UI */
+      .ui-widget-content {
+        background: #F2F5F8;
+        border: none;
+      }
+
+      .ui-widget-header {
+        background: #01AEF0;
+        border: 1px solid #8597A7;
+        color: white;
+        font-weight: bold;
+      }
     </style>
 
-    <!-- <script type="text/javascript" src="./js/jquery-1.12.2.min.js"></script> -->
-    <script src="https://code.jquery.com/jquery-2.2.2.min.js" integrity="sha256-36cp2Co+/62rEAAYHLmRCPIych47CvdM+uTBJwSzWjI=" crossorigin="anonymous"></script>
-    <script src="./bitcore.js"></script>
+    <script type="text/javascript" src="./js/jquery-1.12.2.min.js"></script>
+    <script src="./js/jquery-ui.min.js"></script>
+    <script src="./js/bitcore.js"></script>
 
   </head>
   <body>
 
     <script type="text/javascript">
 
-      var settings = {
+      var defaultSettings = {
         // StartCOIN Insight API instance to use
         explorerUrl: 'http://explorer.startcoin.org/',
 
@@ -56,6 +74,87 @@
         verbose: true
       };
 
+      var settings = {
+        explorerUrl: defaultSettings.explorerUrl,
+        nAddresses: defaultSettings.nAddresses,
+        scanOnly: defaultSettings.scanOnly,
+        fee: defaultSettings.fee,
+        mReq: defaultSettings.mReq,
+        verbose: defaultSettings.verbose
+      };
+
+      // Valid response from Insight API
+      var explorerUrlTest = {
+        txid: 'bb454a84bb6ccec9c53124afb800a84e99f56c247b0f7cc980d3b40102f64f8f',
+        response: {  
+          "txid":"bb454a84bb6ccec9c53124afb800a84e99f56c247b0f7cc980d3b40102f64f8f",
+          "version":1,
+          "locktime":0,
+          "vin":[  
+            {  
+              "txid":"87aa70ee77cac55bdfd64bfec9110216f42a2c1444d09ef88fb2543efb11f3e6",
+              "vout":0,
+              "scriptSig":{  
+                "asm":"3044022016cc50fbd6c37659ab572bf392b6c20e32b83791d6f6d4136ae670706feb8984022000d3ae5f94557efa24c384a0b43174c37f0d00425508e84aa12a6ff4979dc81c01 03ff200785c398eb598ecc9ed42c66f2ca1ad7d422606c3123eae5022a5750e39b"
+              },
+              "sequence":4294967295,
+              "n":0,
+              "addr":"sMGPpPXFvxpw9yQ4DkHfgqzVs6WsfonWD6",
+              "valueSat":99990000,
+              "value":0.9999,
+              "doubleSpentTxID":null
+            },
+            {  
+              "txid":"2ce6f2f392182be48aa9e5044b99e6b63c74e2c17a60f4e0e293564dbc6b866e",
+              "vout":1,
+              "scriptSig":{  
+                "asm":"3046022100aa594d7da96e756bf68f041c5d41f16c4e9971b9ff52a6f9e6413c5c1afdfc84022100f9af62fbf2299824c74c073cf170a0be21dbe440d0cc0f1deefded29046dc4c701 02ddbbd4ead010af66cb35de6d37b874329e0914e6938a16007687b132b4d06bd1"
+              },
+              "sequence":4294967295,
+              "n":1,
+              "addr":"sRowqk4X7KjKvi1ugXkvUtAdm9EXgb55bc",
+              "valueSat":79770000,
+              "value":0.7977,
+              "doubleSpentTxID":null
+            }
+          ],
+          "vout":[  
+            {  
+              "value":"0.56310000",
+              "n":0,
+              "scriptPubKey":{  
+                "asm":"OP_DUP OP_HASH160 2ed191cd247d538153beea6a7c8f82c22b80cec3 OP_EQUALVERIFY OP_CHECKSIG",
+                "reqSigs":1,
+                "type":"pubkeyhash",
+                "addresses":[  
+                  "sNWxDYa1hbnYs1ZvvfYP1wkDcC8rxaHvTJ"
+                ]
+              }
+            },
+            {  
+              "value":"1.23450000",
+              "n":1,
+              "scriptPubKey":{  
+                "asm":"OP_DUP OP_HASH160 0fc0718cc80f19a7dfe64d7b2b0472969d40d95d OP_EQUALVERIFY OP_CHECKSIG",
+                "reqSigs":1,
+                "type":"pubkeyhash",
+                "addresses":[  
+                  "sKggkfUsaUFWeHsfoRD1cZcE4yydfp21yg"
+                ]
+              }
+            }
+          ],
+          "blockhash":"000000000085ce54665d063c6eee3314530bfb37c28581da996926be396c3231",
+          "confirmations":25,
+          "time":1459168903,
+          "blocktime":1459168903,
+          "valueOut":1.7976,
+          "size":374,
+          "valueIn":1.7976,
+          "fees":0
+        }
+      };
+
       // Use the StartCOIN Bitcore bundle
       // This was taken from git://github.com/startcoin-project/bitcore.git#1a5c0c3d424a090f4709897a7e103545345529da and build using "npm install"
       var bitcore = require('bitcore');
@@ -71,33 +170,179 @@
       // Array of addresses with a balance
       var addresses = {};
 
+      var stats = {
+        addresses: 0,
+        balance: 0
+      };
+
+      var getTxDetails = function(explorerUrl, txid, success, err) {
+        $.ajax({
+          url: explorerUrl + 'api/tx/' + txid,
+          type: 'GET',
+          async: false
+        }).done(success).error(err);
+      };
+
+      function isInt(n) {
+        return n % 1 === 0;
+      };
+
+      function validateNAddresses() {
+        hideMessages();
+        var nAddresses = $('#naddresses').val();
+        if (isNaN(nAddresses) || nAddresses <= 0 || !isInt(nAddresses)) {
+          errorMessage('Addresses invalid', 'You must specify a positive number of addresses.');
+          return false;
+        }
+        return true;
+      };
+
+      function validateFee() {
+        hideMessages();
+        var fee = $('#fee').val();
+        if (isNaN(fee) || fee < 0.00000001) {
+          errorMessage('Fee invalid', 'You must specify a positive fee.');
+          return false;
+        }
+        if (fee < 0.0001) {
+          warningMessage('Low fee', 'You have specified a low fee and your transaction may take a long time  to confirm.');
+        }
+        if (fee >= 1) {
+          warningMessage('High fee', 'You have specified amount high fee. Please check the amount you have entered.');
+        }
+        return true;
+      };
+
+      function validateExplorerUrl(callback) {
+        hideMessages();
+        var explorerUrl = $('#explorerUrl').val();
+        getTxDetails(explorerUrl, explorerUrlTest.txid,
+          function(data) {
+            if (data.valueIn === explorerUrlTest.response.valueIn &&
+                data.valueOut === explorerUrlTest.response.valueOut &&
+                data.blockhash === explorerUrlTest.response.blockhash) {
+              callback(true);
+            } else {
+              errorMessage('Explorer invalid', 'The website returned unexpected data. Is it running the StartCOIN version of Insight API?');
+              callback(false);
+            }
+        },
+          function(err) {
+            errorMessage('Explorer invalid', 'The explorer address is invalid.');
+            callback(false);
+        });
+      };
+
+      function validateSettings(callback) {
+        if (!validateNAddresses()) return false;
+        if (!validateFee()) return false;
+        validateExplorerUrl(callback);
+      };
+
+      function updateSettingsObject() {
+        settings.explorerUrl = $('#explorerUrl').val();
+        settings.nAddresses = $('#naddresses').val();
+        settings.scanOnly = $('#scanonly').prop('checked');
+        settings.fee = $('#fee').val();
+      };
+
+      function saveSettings() {
+        $('#btnSettingsSave').prop('disabled', true);
+        validateSettings(function(valid){
+          if (valid) {
+            updateSettingsObject();
+            showPhase1(); 
+          }
+          $('#btnSettingsSave').prop('disabled', false);
+        });
+      };
+
+      function _resetSettings(s) {
+        $('#explorerUrl').val(s.explorerUrl);
+        $('#naddresses').val(s.nAddresses);
+        $('#scanonly').prop('checked', s.scanOnly);
+        $('#fee').val(s.fee);
+      };
+
       function resetSettings() {
-        $('#explorerUrl').val(settings.explorerUrl);
-        $('#naddresses').val(settings.nAddresses);
-        $('#scanonly').prop('checked', settings.scanOnly);
-        $('#fee').val(settings.fee);
+        return _resetSettings(settings);
+      };
+
+      function resetDefaultSettings() {
+        return _resetSettings(defaultSettings);
       };
 
       function showSettings(){
+        hideMessages();
         $('#phase1').addClass('none');
         $('#settings').removeClass('none');
       };
 
       function showHelp(){
+        hideMessages();
         $('#phase1').addClass('none');
         $('#help').removeClass('none');
       };
 
       function showContact(){
+        hideMessages();
         $('#phase1').addClass('none');
         $('#contact').removeClass('none');
       };
 
       function showPhase1(){
+        hideMessages();
+
+        if (settings.scanOnly) {
+          $('#address-input').addClass('none');
+        } else {
+          $('#address-input').removeClass('none');
+        }
+
         $('#settings').addClass('none');
         $('#help').addClass('none');
         $('#contact').addClass('none');
+        $('#phase2').addClass('none');
         $('#phase1').removeClass('none');
+
+        setRescueButtonState();
+      };
+
+      function showPhase2(){
+        hideMessages();
+        $('#settings').addClass('none');
+        $('#help').addClass('none');
+        $('#contact').addClass('none');
+        $('#phase1').addClass('none');
+
+        $('#phase2').removeClass('none');
+      };
+
+      function showPhase3(hide){
+        if (hide) hideMessages();
+        $('#settings').addClass('none');
+        $('#help').addClass('none');
+        $('#contact').addClass('none');
+        $('#phase1').addClass('none');
+        $('#phase2').addClass('none');
+        $('#phase3').removeClass('none');
+      };
+
+      function showTransactionInfo() {
+        $('#phase3-transaction').removeClass('none');
+      };
+
+      function showAddressInfo() {
+        $('#phase3-results-dialog').dialog({
+          modal: true,
+          width: 'auto'
+        });
+      };
+
+      function hideMessages() {
+        $('#note-success').addClass('none');
+        $('#note-warning').addClass('none');
+        $('#note-error').addClass('none');
       };
 
       function successMessage(title, text) {
@@ -106,10 +351,28 @@
         $('#note-success').removeClass('none');
       };
 
+      function warningMessage(title, text) {
+        $('#note-warning-title').text(title);
+        $('#note-warning-text').text(text);
+        $('#note-warning').removeClass('none');
+      };
+
       function errorMessage(title, text) {
         $('#note-error-title').text(title);
         $('#note-error-text').text(text);
         $('#note-error').removeClass('none');
+      };
+
+      function makeAddressesTable() {
+        var resultsTable = $('#phase3-results');
+        resultsTable.find("tr:gt(0)").remove();
+        $.each(addresses, function(i, address) {
+          var str = '<tr>';
+          str += '<td><a href=\"'+settings.explorerUrl+'address/'+address.addr.toString()+'\" target=\"_blank\">'+address.addr.toString()+'</a></td>';
+          str += '<td>'+address.details.balance+' START</td>';
+          str += '</tr>';
+          resultsTable.append(str);
+        });
       };
 
       function validMasterPrivateKey(xprv) {
@@ -127,9 +390,23 @@
         return false;
       };
 
+      function validAddress(address) {
+        var address = address || $('#address').val();
+        return bitcore.Address.validate(address);
+      };
+
+      function setRescueButtonState() {
+        var disabled = !(validMasterPrivateKey() && validAddress());
+
+        if (settings.scanOnly)
+          disabled = !validMasterPrivateKey();
+        
+        $('#btnRescue').prop('disabled', disabled);
+      };
+
       var getDetails = function(addr, callback) {
         $.ajax({
-          url: $('#explorerUrl').val() + 'api/addr/' + addr.toString() + '?noTxList=1&noCache=1',
+          url: settings.explorerUrl + 'api/addr/' + addr.toString() + '?noTxList=1&noCache=1',
           type: 'GET',
           async: false
         }).done(function(data){
@@ -138,6 +415,67 @@
           console.error(xhr);
           errorMessage('Cannot contact explorer', 'Unable to retrieve details for address ' + addr.toString() + '.')
         });
+      };
+
+      // Retrieve UXTOs from Insight
+      var getUtxos = function(addr, callback) {
+        $.ajax({
+          url: settings.explorerUrl + 'api/addr/' + addr.toString() + '/utxo?noCache=1',
+          type: 'GET',
+          async: false
+        }).done(function(data){
+          callback(data);
+        }).error(function(xhr){
+          console.error(xhr);
+          errorMessage('Cannot contact explorer', 'Unable to retrieve UXTOs for address ' + addr.toString());
+        });
+      };
+
+      // Create XML HTTP Request
+      function createRequest() {
+        var result = null;
+        if (window.XMLHttpRequest) {
+          // FireFox, Safari, etc.
+          result = new XMLHttpRequest();
+          if (typeof result.overrideMimeType != 'undefined') {
+            result.overrideMimeType('text/xml'); // Or anything else
+          }
+        }
+        else if (window.ActiveXObject) {
+          // MSIE
+          result = new ActiveXObject("Microsoft.XMLHTTP");
+        } 
+        else {
+          // No known mechanism -- consider aborting the application
+          errorMessage('Fatal error', 'Unable to create HTTP request. Please use a newer browser.');
+        }
+        return result;
+      };
+
+      // Broascast sweep transaction to Insight
+      var broadcastTx = function(signedtx, callback) {
+        var req = createRequest();
+
+        req.onreadystatechange = function() {
+          // Sending...
+          if (req.readyState != 4) {
+            return;
+          }
+
+          // Error
+          if (req.status != 200) {
+            console.error(req);
+            errorMessage('Cannot contact explorer', 'Unable to broadcast sweep transaction (Status: ' + req.status + ')');
+            return;
+          }
+
+          // Success
+          return callback(JSON.parse(req.responseText));
+        };
+
+        req.open('POST', settings.explorerUrl + 'api/tx/send', true);
+        req.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+        req.send('rawtx=' + signedtx);
       };
 
       function scanPath(path, hkey, n, start) {
@@ -180,6 +518,10 @@
             if (details.balance > 0) {
               found = true;
 
+              // Add to stats object
+              stats.addresses++;
+              stats.balance += parseInt(details.balance);
+
               if (settings.verbose) console.log(mAddr.toString() + ' has a balance of ' + details.balance);
 
               addresses[addr.toString()] = {
@@ -189,9 +531,18 @@
                 private: prvKey,
                 public: pubKeys
               };
+
+              // Increment found text
+              $('#phase2-addresses').text(stats.addresses);
+              $('#phase2-balance').text(stats.balance + ' START');
             }
             next = true;
           });
+
+          // Increment progress bar
+          var pb = $('#progressbar');
+          var pbVal = pb.progressbar('value');
+          pb.progressbar('value', pbVal + 1);
 
           while (!next) {
             // wait..
@@ -202,9 +553,6 @@
       };
 
       function scan() {
-        // Transit to phase 2
-        // TODO
-
         var xprv = $('#xprv').val();
         var hkey = new bitcore.HierarchicalKey(xprv);
 
@@ -215,11 +563,21 @@
           console.log();
         }
 
-        // Variable to store results in
-        var memory = {};
-
         // Get the number of addresses in each round
-        var nAddresses = parseInt($('#naddresses').val());
+        var nAddresses = parseInt(settings.nAddresses);
+
+        // Set up addresses text
+        $('#phase2-naddresses').text(nAddresses);
+
+        // Set up addresses found & balance text 
+        $('#phase2-addresses').text(stats.addresses);
+        $('#phase2-balance').text(stats.balance + ' START');
+
+        // Set up the progress bar
+        $('#progressbar').progressbar({
+          value: 0,
+          max: (settings.nAddresses * 4)
+        });
 
         // Scan for addresses, both receive and change.
         // Repeat in batches of nAddresses until nothing is found.
@@ -227,6 +585,12 @@
         var foundNew = false;
         var count = 0;
         do {
+          // Reset progress bar
+          $('#progressbar').progressbar('value', 0);
+
+          // Increment round text
+          $('#phase2-round').text(count);
+
           // Scan old path format
           for (var i = 0; i < settings.mReq; i++) {
             foundOld =
@@ -245,23 +609,115 @@
         if (settings.verbose) console.log('Searched ' + count + ' rounds of ' + nAddresses + ' addresses.');
 
         // Was anything found?
-        if (count == 1) {
+        if (stats.addresses > 0) {
+
+          // Do we need to sweep the addresses?
+          if (!settings.scanOnly) {
+            var address = $('#address').val();
+            if (address !== '') {
+              if (bitcore.Address.validate(address)) {
+                sweep();
+              } else {
+                errorMessage('Invalid address', 'The destination address is not a valid StartCOIN address.');
+              }
+            } else {
+              warningMessage('Retrieval', 'You did not include a destination address. Please start again and provide one to retreive your coins.');
+            }
+          }
+        } else {
           // Show error message
           errorMessage('No addresses found', 'We were unable to find any addresses with a balance.')
         }
-        else {
-          // TODO - show results
-          successMessage('Success', 'We found some addresses with a balance.');
-        }
+
+        $('#phase3-addresses').text(stats.addresses);
+        $('#phase3-balance').text(stats.balance);
+        showPhase3(false);
+      };
+
+      // Sweep address balance to a specified address
+      var sweep = function() {
+
+        // Specified destination address
+        var outAddr = $('#address').val();
+
+        // Add to phase 3 UI
+        $('#phase3-destination').text(outAddr);
+
+        // TODO - this will sweep the balances one at a time
+        // This isn't ideal!
+        $.each(addresses, function(i, address) {
+          getUtxos(address.addr, function(utxos) {
+
+            // Make pubkeys object
+            var pubkeys = []
+            var wk = new bitcore.WalletKey();
+            wk.fromObj({
+              priv: address.private.toString()
+            });
+            pubkeys.push(bitcore.buffertools.toHex(wk.privKey.public));
+
+            var opts = {
+              nReq: settings.mReq,
+              pubkeys: pubkeys,
+              fee: settings.fee
+            };
+
+            var outs = [{
+              address: outAddr,
+              amount: (address.details.balance - settings.fee)
+            }];
+
+            // Map the redeem script to its p2sh address
+            // https://github.com/bitpay/bitcore/issues/286
+            var hashMap = {};
+            hashMap[address.addr.toString()] = address.script.serialize();
+
+            // Build the transaction
+            var tx = (new bitcore.TransactionBuilder(opts))
+              .setUnspent(utxos)
+              .setHashToScriptMap(hashMap)
+              .setOutputs(outs)
+              .sign([address.private.toString()])
+              .build();
+
+            // Is the TX completely signed?
+            var missingSigs = tx.countInputMissingSignatures(0);
+            if (settings.verbose) console.log('Missing signatures: ', missingSigs);
+
+            if (missingSigs == 0) {
+              var txHex = tx.serialize().toString('hex');
+
+              broadcastTx(txHex, function(res) {
+                if (settings.verbose) {
+                  console.log('Transaction: ', txHex);
+                  console.log('=> TXID: ', res.txid);
+                }
+
+                // Display the TXID
+                $('#phase3-txid').attr('href', settings.explorerUrl + '/tx/'+res.txid);
+                successMessage('Transaction submitted', 'Your coins have been retrieved successfully!');
+
+                showTransactionInfo();
+              });
+            }
+          });
+        });
       };
 
       $(function(){
         // Reset settings to default
-        resetSettings();
+        resetDefaultSettings();
 
         // Set up button handlers
-        $('#btnSettingsBack').click(showPhase1);
-        $('#btnSettingsReset').click(resetSettings);
+        $('#btnSettingsSave').click(saveSettings);
+        $('#btnSettingsBack').click(function() {
+          resetSettings();
+          showPhase1();
+        });
+        $('#btnSettingsReset').click(function() {
+          resetDefaultSettings();
+          showPhase1();
+        });
 
         $('#btnHelpBack').click(showPhase1);
 
@@ -271,40 +727,44 @@
         $('#btnPhase1Contact').click(showContact);
         $('#btnPhase1Settings').click(showSettings);
 
-        $('#btnRescue').click(scan);
+        $('#btnRescue').click(function() {
+          showPhase2();
+          scan();
+        });
+
+        $('#btnPhase2Cancel').click(function() {
+          document.location.reload(true);
+        });
+
+        $('#btnPhase3StartAgain').click(function() {
+          document.location.reload(true);
+        });
+
+        $('#btnPhase3Addresses').click(function() {
+          makeAddressesTable();
+          showAddressInfo();
+        });
+
+        // Set up validation handlers
+        $('#explorerUrl').change(function() {
+          validateExplorerUrl(function(valid){
+            // Do nothing
+          });
+        });
+        $('#naddresses').change(validateNAddresses);
+        $('#fee').change(validateFee);
 
         // Check for a valid xprv and enable the rescue button
         // when it's been found.
         $('#xprv').bind('input propertychange', function() {
-          if (validMasterPrivateKey()) {
-            $('#btnRescue').prop('disabled', false);
-          }
-          else {
-            $('#btnRescue').prop('disabled', true);
-          }
+          setRescueButtonState();
         });
 
         // Check for a valid receive address.
         // Disable the rescue button if it's enabled and an incorrect
         // address has been entered.
         $('#address').bind('input propertychange', function() {
-          var address = $('#address').val();
-
-          if (address === '') {
-            if (validMasterPrivateKey()) {
-              $('#btnRescue').prop('disabled', false);
-            }
-            else {
-              $('#btnRescue').prop('disabled', true);
-            }
-          }
-          else {
-            if (bitcore.Address.validate(address)) {
-              $('#btnRescue').prop('disabled', false);
-            } else {
-              $('#btnRescue').prop('disabled', true);
-            }
-          }
+          setRescueButtonState();
         });
       });
     </script>
@@ -325,9 +785,19 @@
                     <i class="fi-check size-24"></i>
                   </div>
                   <div class="text-success size-14">
-                    <h3 id="note-success-title">Your coins were rescued!</h3>
-                    <span id="note-success-text">They're on their way to your wallet now.</span>
+                    <h3 id="note-success-title"></h3>
+                    <span id="note-success-text"></span>
                   </div>
+                </div>
+
+                <div id="note-warning" class="box-notification none">
+                  <div class="box-icon warning">
+                    <i class="fi-info size-24"></i>
+                  </div>
+                  <span class="text-warning size-14">
+                    <h3 id="note-warning-title"></h3>
+                    <span id="note-warning-text"></span>
+                  </span>
                 </div>
 
                 <div id="note-error" class="box-notification none">
@@ -335,8 +805,8 @@
                     <i class="fi-x size-24"></i>
                   </div>
                   <span class="text-warning size-14">
-                    <h3 id="note-error-title">Incorrect Key</h3>
-                    <span id="note-error-text">The Master Private Key you entered was incorrect.</span>
+                    <h3 id="note-error-title"></h3>
+                    <span id="note-error-text"></span>
                   </span>
                 </div>
                 <!-- End of Notification boxes -->
@@ -374,7 +844,7 @@
                         </div>
                       </div>
                       <div class="input">
-                        <input type="text" id="naddresses" name="naddresses" class="form-control" required="true" placeholder="Addresses to Scan">
+                        <input type="number" step="1" id="naddresses" name="naddresses" class="form-control" required="true" placeholder="Addresses to Scan">
                         <i class="fi-magnifying-glass"></i>
                       </div>
 
@@ -393,7 +863,7 @@
                         </div>
                       </div>
                       <div class="input">
-                        <input type="text" id="fee" name="fee" class="form-control" required="true" placeholder="Transaction Fee">
+                        <input type="number" step="0.0001" id="fee" name="fee" class="form-control" required="true" placeholder="Transaction Fee">
                         <i class="fi-bitcoin"></i>
                       </div>
 
@@ -415,7 +885,7 @@
                         StartWallet Rescue can be set to scan for balances or to sign a transaction sweeping them to a specified destination address.</small>
                     </fieldset>
 
-                    <button type="submit" class="button primary radius expand m0">Save</button>
+                    <button type="button" id="btnSettingsSave" class="button primary radius expand m0">Save</button>
                   </form>
 
                   <div class="box-setup-footer">
@@ -477,15 +947,15 @@
                 <!-- Home (Phase 1) page -->
                 <div id="phase1" class="">
                   <form name="phase1Form">
-                    <div class="input">
-                        <input type="text" class="form-control" id="xprv" name="xprv" placeholder="Master Private Key" required="true">
-                        <i class="fi-key"></i>
-                      </div>
+                    <div id="xprv-input" class="input">
+                      <input type="text" class="form-control" id="xprv" name="xprv" placeholder="Master Private Key" required="true">
+                      <i class="fi-key"></i>
+                    </div>
 
-                      <div class="input">
-                        <input type="text" class="form-control" id="address" name="address" placeholder="Destination Address (optional)">
-                        <i class="icon-paperplane"></i>
-                      </div>
+                    <div id="address-input" class="input">
+                      <input type="text" class="form-control" id="address" name="address" placeholder="Destination Address" required="true">
+                      <i class="icon-paperplane"></i>
+                    </div>
                     
                     <button id="btnRescue" type="button" class="button primary radius expand m0" disabled="disabled">
                         Rescue Coins
@@ -516,6 +986,80 @@
                   </div>
                 </div>
                 <!-- End of Home page -->
+
+                <!-- Scanning (Phase 2) page -->
+                <div id="phase2" class="settings none">
+                  <form name="phase2Form">
+                    <fieldset>
+                      <legend>Scanning</legend>
+                      <p class="text-gray">
+                        Found <strong id="phase2-addresses">0</strong> addresses with a balance of <strong id="phase2-balance">0 START</strong>.
+                      </p>
+
+                      <div id="progressbar"></div>
+
+                      <small class="text-gray">
+                        Performing round <strong id="phase2-round">0</strong> with <strong id="phase2-naddresses">30</strong> addresses.
+                      </small>
+                    </fieldset>
+                  </form>
+
+                  <div class="box-setup-footer">
+                    <div class="left m10r">
+                      <a id="btnPhase2Cancel" class="button outline dark-gray tiny ng-click-active">
+                        <i class="icon-close-circle show-for-large-up size-14" disabled></i> 
+                        <span>Cancel</span>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+                <!-- End of Scanning (Phase 2) page -->
+
+                <!-- Results (Phase 3) page -->
+                <div id="phase3" class="settings none">
+                  <form name="phase3Form">
+                    <fieldset>
+                      <legend>Results</legend>
+                      <p class="text-gray">
+                        Found <strong id="phase3-addresses">0</strong> addresses with a balance of <strong id="phase3-balance">0 START</strong>.
+                      </p>
+
+                      <p id="phase3-transaction" class="text-gray none">
+                        This balance has been sent to <a href="" id="phase3-destination" target="_blank" title="Click here to view the address on the blockchain explorer">sKggkfUsaUFWeHsfoRD1cZcE4yydfp21yg</a>. Click <a href="" id="phase3-txid" target="_blank" title="Click here to view the transaction on the blockchain explorer">here</a> to view the transaction.
+                      </p>
+                    </fieldset>
+
+                    <div id="phase3-results-dialog" title="Results" class="none">
+                      <table id="phase3-results">
+                        <thead>
+                          <tr>
+                            <th>Address</th>
+                            <th>Balance</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                        </tbody>
+                      </table>
+                    </div>
+                  </form>
+
+                  <div class="box-setup-footer">
+                    <div class="right">
+                      <a id="btnPhase3Addresses" class="button outline dark-gray tiny">
+                        <i class="icon-history show-for-large-up size-14"></i> 
+                        <span>View Addresses</span>
+                      </a>
+                    </div>
+
+                    <div class="left m10r">
+                      <a id="btnPhase3StartAgain" class="button outline dark-gray tiny ng-click-active">
+                        <i class="fi-arrow-left show-for-large-up size-14"></i> 
+                        <span>Start Again</span>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+                <!-- End of Results (Phase 3) page -->
 
               </div>
               <div class="extra-margin-bottom"></div>
