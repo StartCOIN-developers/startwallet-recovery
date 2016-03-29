@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="./css/jquery-ui.min.css">
 
     <style>
+      /* Copay */
       .title-text {
         font-size: 2em;
         font-style: italic;
@@ -417,7 +418,7 @@
         });
       };
 
-      // Retrieve UXTOs from Insight
+      // Retrieve UTXOs from Insight
       var getUtxos = function(addr, callback) {
         $.ajax({
           url: settings.explorerUrl + 'api/addr/' + addr.toString() + '/utxo?noCache=1',
@@ -427,7 +428,7 @@
           callback(data);
         }).error(function(xhr){
           console.error(xhr);
-          errorMessage('Cannot contact explorer', 'Unable to retrieve UXTOs for address ' + addr.toString());
+          errorMessage('Cannot contact explorer', 'Unable to retrieve UTXOs for address ' + addr.toString());
         });
       };
 
@@ -504,13 +505,13 @@
 
           if (settings.verbose) console.log(path + '/' + i + ' ' + addr.toString() + ':' + prvKey.toString());
 
-          // Create a 1-of-1 multisig address from that
+          // Create a 1-of-m multisig address from that
           var pubKeys = pubkeys;
           var script = bitcore.Script.createMultisig(settings.mReq, pubKeys);
 
           mAddr = bitcore.Address.fromScript(script);
 
-          if (settings.verbose) console.log('1-of-1 multisig address: ' + mAddr.toString());
+          if (settings.verbose) console.log('1-of-' + settings.mReq + ' multisig address: ' + mAddr.toString());
 
           // Check for a balance
           var next = false;
