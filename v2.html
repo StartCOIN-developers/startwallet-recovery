@@ -47,8 +47,10 @@
     </style>
 
     <script type="text/javascript" src="./js/jquery-1.12.2.min.js"></script>
-    <script src="./js/jquery-ui.min.js"></script>
-    <script src="./js/bitcore.js"></script>
+    <script type="text/javascript" src="./js/jquery-ui.min.js"></script>
+    <script type="text/javascript" src="./js/async.min.js"></script>
+    <script type="text/javascript" src="./js/ajax.js"></script>
+    <script type="text/javascript" src="./js/bitcore.js"></script>
 
   </head>
   <body>
@@ -405,25 +407,11 @@
         $('#btnRescue').prop('disabled', disabled);
       };
 
-      var getDetails = function(addr, callback) {
-        $.ajax({
-          url: settings.explorerUrl + 'api/addr/' + addr.toString() + '?noTxList=1&noCache=1',
-          type: 'GET',
-          async: false
-        }).done(function(data){
-          callback(data);
-        }).error(function(xhr){
-          console.error(xhr);
-          errorMessage('Cannot contact explorer', 'Unable to retrieve details for address ' + addr.toString() + '.')
-        });
-      };
-
       // Retrieve UTXOs from Insight
       var getUtxos = function(addr, callback) {
         $.ajax({
           url: settings.explorerUrl + 'api/addr/' + addr.toString() + '/utxo?noCache=1',
-          type: 'GET',
-          async: false
+          type: 'GET'
         }).done(function(data){
           callback(data);
         }).error(function(xhr){
@@ -479,78 +467,168 @@
         req.send('rawtx=' + signedtx);
       };
 
-      function scanPath(path, hkey, n, start) {
+      function getDetailsItem(addr, addressObj, callback) {
+        fetch(settings.explorerUrl + 'api/addr/' + addr.toString() + '?noTxList=1&noCache=1', function(xhr) {
+          var details = JSON.parse(xhr.responseText);
+          addressObj.details = details;
+          var found = false;
+
+          if (details.balance > 0) {
+            found = true;
+
+            // Add to stats object
+            stats.addresses++;
+            stats.balance += parseFloat(details.balance);
+
+            if (settings.verbose) console.log(addr.toString() + ' has a balance of ' + details.balance + ' START');
+
+            // Add to results
+            addresses[addr.toString()] = addressObj;
+
+            // Increment found text
+            $('#phase2-addresses').text(stats.addresses);
+            $('#phase2-balance').text(stats.balance + ' START');
+          }
+
+          callback(null, found);
+        });
+      };
+
+      function scanItem(path, hkey, i, callback) {
+        // Derive a P2PKH address
+        var pub = hkey.derive(path + '/' + i).eckey.public;
+        var prv = hkey.derive(path + '/' + i).eckey.private;
+
+        // Make Bitcore private key object
+        var prvKey = new bitcore.PrivateKey(bitcore.networks.livenet.privKeyVersion, prv, true);
+
+        // Make an address
+        var pubkeys = []
+        var wk = new bitcore.WalletKey();
+        wk.fromObj({
+          priv: prvKey.toString()
+        });
+        pubkeys.push(wk.privKey.public);
+        
+        var addr = wk.storeObj().addr;
+
+        if (settings.verbose) console.log(path + '/' + i + ' ' + addr.toString() + ':' + prvKey.toString());
+
+        // Create a 1-of-m multisig address from that
+        var pubKeys = pubkeys;
+        var script = bitcore.Script.createMultisig(settings.mReq, pubKeys);
+
+        mAddr = bitcore.Address.fromScript(script);
+
+        if (settings.verbose) console.log('1-of-' + settings.mReq + ' multisig address: ' + mAddr.toString());
+
+        var addressObj = {
+          addr: mAddr,
+          script: script,
+          private: prvKey,
+          public: pubKeys
+        };
+
+        // Check for a balance
+        getDetailsItem(mAddr, addressObj, callback);
+      };
+
+      function scanPath(path, hkey, n, start, callback) {
         start = start || 0;
 
         var found = false;
 
+        var tasks = [];
         for (var i = start; i < (start + n); i++) {
+          // Create task function in closure
+          var task = function(index){
+            return function(next) {
+              scanItem(path, hkey, index, function(err, _found) {
+                if (_found) found = true;
 
-          // Derive a P2PKH address
-          var pub = hkey.derive(path + '/' + i).eckey.public;
-          var prv = hkey.derive(path + '/' + i).eckey.private;
+                // Update progress bar
+                var pb = $('#progressbar');
+                var pbVal = pb.progressbar('value');
+                pb.progressbar('value', pbVal + 1);
 
-          // Make Bitcore private key object
-          var prvKey = new bitcore.PrivateKey(bitcore.networks.livenet.privKeyVersion, prv, true);
+                next(err);
+              });
+            };
+          }(i);
 
-          // Make an address
-          var pubkeys = []
-          var wk = new bitcore.WalletKey();
-          wk.fromObj({
-            priv: prvKey.toString()
-          });
-          pubkeys.push(wk.privKey.public);
-          
-          var addr = wk.storeObj().addr;
-
-          if (settings.verbose) console.log(path + '/' + i + ' ' + addr.toString() + ':' + prvKey.toString());
-
-          // Create a 1-of-m multisig address from that
-          var pubKeys = pubkeys;
-          var script = bitcore.Script.createMultisig(settings.mReq, pubKeys);
-
-          mAddr = bitcore.Address.fromScript(script);
-
-          if (settings.verbose) console.log('1-of-' + settings.mReq + ' multisig address: ' + mAddr.toString());
-
-          // Check for a balance
-          var next = false;
-          getDetails(mAddr, function(details){
-            if (details.balance > 0) {
-              found = true;
-
-              // Add to stats object
-              stats.addresses++;
-              stats.balance += parseInt(details.balance);
-
-              if (settings.verbose) console.log(mAddr.toString() + ' has a balance of ' + details.balance);
-
-              addresses[addr.toString()] = {
-                addr: mAddr,
-                script: script,
-                details: details,
-                private: prvKey,
-                public: pubKeys
-              };
-
-              // Increment found text
-              $('#phase2-addresses').text(stats.addresses);
-              $('#phase2-balance').text(stats.balance + ' START');
-            }
-            next = true;
-          });
-
-          // Increment progress bar
-          var pb = $('#progressbar');
-          var pbVal = pb.progressbar('value');
-          pb.progressbar('value', pbVal + 1);
-
-          while (!next) {
-            // wait..
-          }
+          // Push to task array
+          tasks.push(task);
         }
 
-        return found;
+        async.series(tasks, function(err) {
+          callback(err, found);
+        });
+      };
+
+      function scanRound(hkey, nAddresses, count, callback) {
+        // Increment round text
+        // Increment by one to prevent 0-indexing
+        $('#phase2-round').text(count + 1);
+
+        // New scan paths
+        var tasks = [
+          function(next) {
+            scanPath(bip32.basePath + bip32.copayPath + bip32.changePath, hkey, nAddresses, nAddresses*count, function(err, found) {
+              next(err, found);
+            });
+          },
+
+          function(next) {
+            scanPath(bip32.basePath + bip32.copayPath + bip32.receivePath, hkey, nAddresses, nAddresses*count, function(err, found) {
+              next(err, found);
+            });
+          },
+        ];
+
+        // Old scan paths
+        for (var i = 0; i < settings.mReq; i++) {
+          var changeTask = function(index) {
+            return function(next) {
+              scanPath(bip32.basePath + ('/' + index) + bip32.changePath, hkey, nAddresses, nAddresses*count, function(err, found) {
+                next(err, found);
+              });
+            };
+          }(i);
+          tasks.push(changeTask);
+
+          var receiveTask = function(index) {
+            return function(next) {
+              scanPath(bip32.basePath + ('/' + index) + bip32.receivePath, hkey, nAddresses, nAddresses*count, function(err, found) {
+                next(err, found);
+              });
+            };
+          }(i);
+          tasks.push(receiveTask);
+        }
+
+        // Set up the progress bar
+        $('#progressbar').progressbar({
+          value: 0,
+          max: (settings.nAddresses * tasks.length)
+        });
+
+        // Reset progress bar
+        $('#progressbar').progressbar('value', 0);
+
+        async.series(tasks, function(err, found) {
+          var params = {hkey: hkey, nAddresses: nAddresses, count: count};
+          callback(err, found, params);
+        });
+      };
+
+      function scanCallback(err, found, params) {
+        if (err) {
+          console.error(err);
+          return errorMessage('Scanning failed', 'We were unable to scan for addresses.');
+        }
+        var filtered = found.filter(function(f){return f});
+        if (filtered.length) return scanRound(params.hkey, params.nAddresses, params.count+1, scanCallback);
+        else return finishScanning(params.count);
       };
 
       function scan() {
@@ -574,40 +652,13 @@
         $('#phase2-addresses').text(stats.addresses);
         $('#phase2-balance').text(stats.balance + ' START');
 
-        // Set up the progress bar
-        $('#progressbar').progressbar({
-          value: 0,
-          max: (settings.nAddresses * 4)
-        });
-
         // Scan for addresses, both receive and change.
         // Repeat in batches of nAddresses until nothing is found.
-        var foundOld = false;
-        var foundNew = false;
-        var count = 0;
-        do {
-          // Reset progress bar
-          $('#progressbar').progressbar('value', 0);
+        scanRound(hkey, nAddresses, 0, scanCallback);
+      };
 
-          // Increment round text
-          $('#phase2-round').text(count);
-
-          // Scan old path format
-          for (var i = 0; i < settings.mReq; i++) {
-            foundOld =
-              scanPath(bip32.basePath + '/' + i + bip32.changePath, hkey, nAddresses, nAddresses*count) ||
-              scanPath(bip32.basePath + '/' + i + bip32.receivePath, hkey, nAddresses, nAddresses*count);
-          }
-
-          // Scan new path format
-          foundNew =
-            scanPath(bip32.basePath + bip32.copayPath + bip32.changePath, hkey, nAddresses, nAddresses*count) ||
-            scanPath(bip32.basePath + bip32.copayPath + bip32.receivePath, hkey, nAddresses, nAddresses*count);
-
-          count++;
-        } while (foundOld || foundNew);
-
-        if (settings.verbose) console.log('Searched ' + count + ' rounds of ' + nAddresses + ' addresses.');
+      function finishScanning(count) {
+        if (settings.verbose) console.log('Searched ' + count + ' rounds of ' + settings.nAddresses + ' addresses.');
 
         // Was anything found?
         if (stats.addresses > 0) {
@@ -631,7 +682,7 @@
         }
 
         $('#phase3-addresses').text(stats.addresses);
-        $('#phase3-balance').text(stats.balance);
+        $('#phase3-balance').text(stats.balance + ' START');
         showPhase3(false);
       };
 
