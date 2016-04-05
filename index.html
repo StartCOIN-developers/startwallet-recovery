@@ -6,7 +6,10 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <title>StartWallet Rescue v2</title>
+    <title>StartWallet Rescue</title>
+
+    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="./favicon.ico" type="image/x-icon">
 
     <link rel="stylesheet" href="./css/main.css">
     <link rel="stylesheet" href="./css/icons.css">
@@ -333,6 +336,7 @@
 
       function showTransactionInfo() {
         $('#phase3-transaction').removeClass('none');
+        $('#phase3-txid-list').removeClass('none');
       };
 
       function showAddressInfo() {
@@ -376,6 +380,17 @@
           str += '</tr>';
           resultsTable.append(str);
         });
+      };
+
+      function addTxidToList(txid, amount) {
+        var list = $('#phase3-txid-list');
+        var str = '<li>';
+        str += '<span class=\"text-gray\">';
+        str += '<i class=\"fi-bitcoin-circle\"></i>'
+        str += '</span> ';
+        str += '<a href=\"'+settings.explorerUrl+'tx/'+txid+'\" title=\"Click here to view the transaction on the blockchain explorer\" target=\"_blank\">'+amount+' START</a>';
+        str += '</li>';
+        list.append(str);
       };
 
       function validMasterPrivateKey(xprv) {
@@ -695,8 +710,6 @@
         // Add to phase 3 UI
         $('#phase3-destination').text(outAddr);
 
-        // TODO - this will sweep the balances one at a time
-        // This isn't ideal!
         $.each(addresses, function(i, address) {
           getUtxos(address.addr, function(utxos) {
 
@@ -745,10 +758,7 @@
                   console.log('=> TXID: ', res.txid);
                 }
 
-                // Display the TXID
-                $('#phase3-txid').attr('href', settings.explorerUrl + '/tx/'+res.txid);
-                successMessage('Transaction submitted', 'Your coins have been retrieved successfully!');
-
+                addTxidToList(res.txid, (address.details.balance - settings.fee));
                 showTransactionInfo();
               });
             }
@@ -1077,8 +1087,12 @@
                       </p>
 
                       <p id="phase3-transaction" class="text-gray none">
-                        This balance has been sent to <a href="" id="phase3-destination" target="_blank" title="Click here to view the address on the blockchain explorer">sKggkfUsaUFWeHsfoRD1cZcE4yydfp21yg</a>. Click <a href="" id="phase3-txid" target="_blank" title="Click here to view the transaction on the blockchain explorer">here</a> to view the transaction.
+                        This balance has been sent to <a href="" id="phase3-destination" target="_blank" title="Click here to view the address on the blockchain explorer">sKggkfUsaUFWeHsfoRD1cZcE4yydfp21yg</a>. You can track the transactions by clicking below.
                       </p>
+
+                      <ul id="phase3-txid-list" class="none">
+                        <!-- TXIDs are appended here -->
+                      </ul>
                     </fieldset>
 
                     <div id="phase3-results-dialog" title="Results" class="none">
@@ -1090,6 +1104,7 @@
                           </tr>
                         </thead>
                         <tbody>
+                          <!-- Addresses are appended here -->
                         </tbody>
                       </table>
                     </div>
