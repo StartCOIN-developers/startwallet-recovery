@@ -24,12 +24,14 @@ To retrieve your coins you will need your **Master Private Key**. This is a long
 
 1. Navigate to [lukem512.github.io/startwallet-rescue](https://lukem512.github.io/startwallet-rescue) or [download](https://github.com/lukem512/startwallet-rescue/archive/master.zip) the tool and open `index.html`.
 
-2. Enter your Master Private Key, obtained as-per the instructions above. Click on the **Scan** button.
+2. Enter your Master Private Key, obtained as-per the instructions above, in the first box.
 
-3. To view any addresses with a balance, click the **Show Results** button.
+3. Enter a **StartCOIN address** that you own in the second box.
 
-4. Enter a **StartCOIN address** that you want to send the coins to. Click the **Sweep** button to retrieve the coins.
+4. Click the **Rescue Coins** button.
 
-5. You will be presented with a **TXID** to track the transaction.
+5. Wait for the tool to scan your addresses. You can see how many addresses it has found, alongside the total balance, above the progress bar.
 
-You can view images for the process by [clicking here](https://imgur.com/a/PTUfK).
+6. When the tool has finished scanning it will transmit your transaction and give you a **TXID**. Your coins will be available after 6 confirmations.
+
+If you want to view the addresses and their balances click the **View Addresses** button. You can also run the tool without specifying a destination address by using the **Scan only** option in the settings.
