@@ -2,6 +2,8 @@
 
 A tool for retrieving coins from [StartWallet.com](http://startwallet.com). This tool will take your Master Private Key and retrieve coins derived from it, sending them to an address of your choice.
 
+![StartWallet Rescue in use](http://i.giphy.com/xTiQyp9qeXRCbH2tdC.gif)
+
 ## Master Private Key
 
 To retrieve your coins you will need your **Master Private Key**. This is a long string beginning with `xprv` that you can find in StartWallet by follwing the instructions below:
