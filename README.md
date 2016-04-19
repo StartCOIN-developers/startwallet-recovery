@@ -1,8 +1,8 @@
-# StartWallet Rescue
+# StartWallet Recovery
 
 A tool for retrieving coins from [StartWallet.com](http://startwallet.com). This tool will take your Master Private Key and retrieve coins derived from it, sending them to an address of your choice.
 
-![StartWallet Rescue in use](http://i.giphy.com/xTiQyp9qeXRCbH2tdC.gif)
+![StartWallet Recovery in use](http://i.giphy.com/xTiQyp9qeXRCbH2tdC.gif)
 
 ## Master Private Key
 
@@ -28,7 +28,7 @@ To retrieve your coins you will need your **Master Private Key**. This is a long
 
 3. Enter a **StartCOIN address** that you own in the second box.
 
-4. Click the **Rescue Coins** button.
+4. Click the **Recover Coins** button.
 
 5. Wait for the tool to scan your addresses. You can see how many addresses it has found, alongside the total balance, above the progress bar.
 
