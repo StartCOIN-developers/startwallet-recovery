@@ -22,7 +22,7 @@ To retrieve your coins you will need your **Master Private Key**. This is a long
 
 ## Retrieving Coins
 
-1. Navigate to [lukem512.github.io/startwallet-rescue](https://lukem512.github.io/startwallet-rescue) or [download](https://github.com/lukem512/startwallet-rescue/archive/master.zip) the tool and open `index.html`.
+1. Navigate to [startcoin-developers.github.io/startwallet-rescue/](https://startcoin-developers.github.io/startwallet-rescue/) or [download](https://github.com/startcoin-developers/startwallet-rescue/archive/master.zip) the tool and open `index.html`.
 
 2. Enter your Master Private Key, obtained as-per the instructions above, in the first box.
 
