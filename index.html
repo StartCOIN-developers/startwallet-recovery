@@ -8,8 +8,24 @@
 
     <title>StartWallet Rescue</title>
 
-    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
-    <link rel="icon" href="./favicon.ico" type="image/x-icon">
+    <link rel="apple-touch-icon" sizes="57x57" href="./favicon/apple-icon-57x57.png">
+    <link rel="apple-touch-icon" sizes="60x60" href="./favicon/apple-icon-60x60.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="./favicon/apple-icon-72x72.png">
+    <link rel="apple-touch-icon" sizes="76x76" href="./favicon/apple-icon-76x76.png">
+    <link rel="apple-touch-icon" sizes="114x114" href="./favicon/apple-icon-114x114.png">
+    <link rel="apple-touch-icon" sizes="120x120" href="./favicon/apple-icon-120x120.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="./favicon/apple-icon-144x144.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="./favicon/apple-icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="./favicon/apple-icon-180x180.png">
+    <link rel="icon" type="image/png" sizes="192x192"  href="./favicon/android-icon-192x192.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="96x96" href="./favicon/favicon-96x96.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="./favicon/favicon-16x16.png">
+    <link rel="manifest" href="./favicon/manifest.json">
+
+    <meta name="msapplication-TileColor" content="#404041">
+    <meta name="msapplication-TileImage" content="./favicon/ms-icon-144x144.png">
+    <meta name="theme-color" content="#404041">
 
     <link rel="stylesheet" href="./css/main.css">
     <link rel="stylesheet" href="./css/icons.css">
@@ -54,6 +70,7 @@
     <script type="text/javascript" src="./js/async.min.js"></script>
     <script type="text/javascript" src="./js/ajax.js"></script>
     <script type="text/javascript" src="./js/bitcore.js"></script>
+    <script type="text/javascript" src="./js/sjcl.js"></script>
 
   </head>
   <body>
@@ -71,7 +88,7 @@
         scanOnly: false,
 
         // Set fee for miners
-        fee: 0.0001,
+        fee: 0.1,
 
         // Number of required signers
         mReq: 1,
@@ -284,16 +301,22 @@
         $('#settings').removeClass('none');
       };
 
+      function showBackup(){
+        hideMessages();
+        $('#phase1').addClass('none');
+        $('#backup').removeClass('none');
+      };
+
       function showHelp(){
         hideMessages();
         $('#phase1').addClass('none');
         $('#help').removeClass('none');
       };
 
-      function showContact(){
-        hideMessages();
-        $('#phase1').addClass('none');
-        $('#contact').removeClass('none');
+      function showWalletPassword(){
+        $('#backupBackup').prop('disabled', true);
+        $('#backupPassword').prop('disabled', true);
+        $('#backup-wallet-password').removeClass('none');
       };
 
       function showPhase1(){
@@ -306,8 +329,8 @@
         }
 
         $('#settings').addClass('none');
+        $('#backup').addClass('none');
         $('#help').addClass('none');
-        $('#contact').addClass('none');
         $('#phase2').addClass('none');
         $('#phase1').removeClass('none');
 
@@ -317,8 +340,8 @@
       function showPhase2(){
         hideMessages();
         $('#settings').addClass('none');
+        $('#backup').addClass('none');
         $('#help').addClass('none');
-        $('#contact').addClass('none');
         $('#phase1').addClass('none');
 
         $('#phase2').removeClass('none');
@@ -327,8 +350,8 @@
       function showPhase3(hide){
         if (hide) hideMessages();
         $('#settings').addClass('none');
+        $('#backup').addClass('none');
         $('#help').addClass('none');
-        $('#contact').addClass('none');
         $('#phase1').addClass('none');
         $('#phase2').addClass('none');
         $('#phase3').removeClass('none');
@@ -353,20 +376,20 @@
       };
 
       function successMessage(title, text) {
-        $('#note-success-title').text(title);
-        $('#note-success-text').text(text);
+        $('#note-success-title').html(title);
+        $('#note-success-text').html(text);
         $('#note-success').removeClass('none');
       };
 
       function warningMessage(title, text) {
-        $('#note-warning-title').text(title);
-        $('#note-warning-text').text(text);
+        $('#note-warning-title').html(title);
+        $('#note-warning-text').html(text);
         $('#note-warning').removeClass('none');
       };
 
       function errorMessage(title, text) {
-        $('#note-error-title').text(title);
-        $('#note-error-text').text(text);
+        $('#note-error-title').html(title);
+        $('#note-error-text').html(text);
         $('#note-error').removeClass('none');
       };
 
@@ -413,6 +436,28 @@
         return bitcore.Address.validate(address);
       };
 
+      function validBackup(backup) {
+        var backup = backup || $('#backupBackup').val();
+
+        // TODO - what is a valid backup?
+
+        if (typeof backup === 'string') {
+          try {
+            var obj = JSON.parse(backup);
+          } catch (e) {
+            if (settings.verbose) console.log('Failed to parse backup JSON');
+            return false;
+          }
+        }
+
+        return true;
+      };
+
+      function validPassword(password) {
+        var password = password || $('#backupPassword').val();
+        return (password.length > 0);
+      }
+
       function setRescueButtonState() {
         var disabled = !(validMasterPrivateKey() && validAddress());
 
@@ -420,6 +465,82 @@
           disabled = !validMasterPrivateKey();
         
         $('#btnRescue').prop('disabled', disabled);
+      };
+
+      function setDecryptButtonState() {
+        var disabled = !(validBackup() && validPassword());
+        $('#btnBackupDecrypt').prop('disabled', disabled);
+      };
+
+      function decryptWallet(backup, password) {
+        var backup = backup || $('#backupBackup').val();
+        var plain, obj;
+
+        try {
+          plain = sjcl.decrypt(password, backup.xPrivKeyEncrypted);
+
+          if (plain) {
+            $('#xprv').val(plain);
+            showPhase1();
+          } else {
+            hideMessages();
+            errorMessage('Unknown backup format', 'We are not able to decrypt this format. Please contact <a href="mailto:grace@startjoin.com">StartJOIN</a> for help.')
+          }
+        } catch (err) {
+          console.error('Could not decrypt backup with wallet encryption', err);
+          return false;
+        }
+
+        return true;
+      };
+
+      var walletBackup;
+
+      function decrypt() {
+        var plain, obj;
+        try {
+          var backup = $('#backupBackup').val();
+          var password = $('#backupPassword').val();
+
+          plain = sjcl.decrypt(password, backup);
+          obj = JSON.parse(plain);
+
+          if (obj.privateKey && obj.privateKey.extendedPrivateKeyString) {
+            $('#xprv').val(obj.privateKey.extendedPrivateKeyString);
+            showPhase1();
+          }
+          else if (obj.xPrivKey) {
+            $('#xprv').val(obj.xPrivKey);
+            showPhase1();
+          }
+          else if (obj.xPrivKeyEncrypted) {
+
+            // Create a closure for the new handler
+            var decryptWalletHandler = (function(backup){
+              return function() {
+                var password = $('#backupWalletPassword').val()
+                decryptWallet(backup, password);
+              }
+            })(obj);
+
+            // Override decrypt button listener
+            $('#btnBackupDecrypt').click(decryptWalletHandler);
+
+            // First check original password
+            if (!decryptWallet(obj, password)) {
+              hideMessages();
+              warningMessage('Wallet encryption enabled', 'You have enabled wallet encryption. Please enter your wallet password.');
+              showWalletPassword();
+            }
+          }
+          else {
+            hideMessages();
+            errorMessage('Unknown backup format', 'We are not able to decrypt this format. Please contact <a href="mailto:grace@startjoin.com">StartJOIN</a> for help.')
+          }
+        } catch(err) {
+          console.error(err);
+          errorMessage('Cannot decrypt backup', 'Please check your password and try again.');
+        }
       };
 
       // Retrieve UTXOs from Insight
@@ -488,7 +609,7 @@
           addressObj.details = details;
           var found = false;
 
-          if (details.balance > 0) {
+          if (details.balance > settings.fee) {
             found = true;
 
             // Add to stats object
@@ -713,6 +834,11 @@
         $.each(addresses, function(i, address) {
           getUtxos(address.addr, function(utxos) {
 
+            utxos = utxos.map(function(utxo) {
+              utxo.scriptPubKey = bitcore.Script.fromHumanReadable(utxo.scriptPubKey).toString('hex');
+              return utxo;
+            })
+
             // Make pubkeys object
             var pubkeys = []
             var wk = new bitcore.WalletKey();
@@ -783,10 +909,12 @@
 
         $('#btnHelpBack').click(showPhase1);
 
-        $('#btnContactBack').click(showPhase1);
+        $('#btnBackupBack').click(showPhase1);
+
+        $('#btnBackupDecrypt').click(decrypt);
 
         $('#btnPhase1Help').click(showHelp);
-        $('#btnPhase1Contact').click(showContact);
+        $('#btnPhase1Backup').click(showBackup);
         $('#btnPhase1Settings').click(showSettings);
 
         $('#btnRescue').click(function() {
@@ -815,6 +943,18 @@
         });
         $('#naddresses').change(validateNAddresses);
         $('#fee').change(validateFee);
+
+        // Check for a valid backup and enable the decrypt button
+        // when it's been found.
+        $('#backupBackup').bind('input propertychange', function() {
+          setDecryptButtonState();
+        });
+
+        // Check for a valid backup password and enable the decrypt button
+        // when it's been found.
+        $('#backupPassword').bind('input propertychange', function() {
+          setDecryptButtonState();
+        });
 
         // Check for a valid xprv and enable the rescue button
         // when it's been found.
@@ -976,6 +1116,8 @@
                     <p>To retrieve your coins you will need your master private key. You can find this by logging into your account at StartWallet and navigating to <a href="https://startwallet.com/#!/moreSettings" target="_blank" title="Click here to go to your StartWallet settings">Settings</a>, clicking "Show advanced options" and then clicking the button that says "Show" beneath the heading "Master Private Key".</p>
 
                     <p>You will also need a StartCOIN address to send your coins to. You can generate an address by downloading the StartCOIN desktop client from <a href="https://www.startcoin.org/#wallet" target="_blank" title="Click here to go to the StartCOIN download page">here</a>. Once you have installed the wallet click the "Receive" tab to find your addresses.</p>
+
+                    <p>To contact the StartCOIN team you can email <a href="mailto:grace@startjoin.com" target="_blank" title="Click to email Grace at StartCOIN">Grace</a> or tweet to <a href="https://twitter.com/start_coin" target="_blank" title="Click here to tweet to @start_coin">@start_coin</a>.</p>
                   </div>
 
                   <div class="box-setup-footer">
@@ -989,22 +1131,37 @@
                 </div>
                 <!-- End of Help page -->
 
-                <!-- Contact page -->
-                <div id="contact" class="none">
-                  <div class="text-gray">
-                    <p>To contact the StartCOIN team you can email <a href="mailto:grace@startjoin.com" target="_blank" title="Click to email Grace at StartCOIN">Grace</a> or tweet to <a href="https://twitter.com/start_coin" target="_blank" title="Click here to tweet to @start_coin">@start_coin</a>.</p>
-                  </div>
+                <!-- Backup page -->
+                <div id="backup" class="none">
+                  <form name="backupForm">
+                    <div class="input">
+                      <input type="text" step="1" id="backupBackup" name="backupBackup" class="form-control" required="true" placeholder="Encrypted Backup">
+                      <i class="icon-upload"></i>
+                    </div>
+
+                    <div class="input">
+                      <input type="password" step="1" id="backupPassword" name="backupPassword" class="form-control" required="true" placeholder="Backup Password">
+                      <i class="fi-lock"></i>
+                    </div>
+
+                    <div id="backup-wallet-password" class="input none">
+                      <input type="password" step="1" id="backupWalletPassword" name="backupWalletPassword" class="form-control" required="true" placeholder="Wallet Password">
+                      <i class="fi-lock"></i>
+                    </div>
+
+                    <button type="button" id="btnBackupDecrypt" class="button primary radius expand m0" disabled>Decrypt</button>
+                  </form>
 
                   <div class="box-setup-footer">
                     <div class="left m10r">
-                      <a id="btnContactBack" class="button outline dark-gray tiny ng-click-active">
+                      <a id="btnBackupBack" class="button outline dark-gray tiny ng-click-active">
                         <i class="fi-arrow-left show-for-large-up size-14"></i> 
                         <span>Back</span>
                       </a>
                     </div>
                   </div>
                 </div>
-                <!-- End of Contact page -->
+                <!-- End of Backup page -->
 
                 <!-- Home (Phase 1) page -->
                 <div id="phase1" class="">
@@ -1040,9 +1197,9 @@
                     </div>
 
                     <div class="left">
-                      <a id="btnPhase1Contact" class="button outline dark-gray tiny">
-                        <i class="icon-email show-for-large-up size-14"></i> 
-                        <span>Contact Us</span>
+                      <a id="btnPhase1Backup" class="button outline dark-gray tiny">
+                        <i class="icon-upload show-for-large-up size-14"></i> 
+                        <span>Backup</span>
                       </a>
                     </div>
                   </div>
