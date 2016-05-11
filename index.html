@@ -508,8 +508,15 @@
           plain = sjcl.decrypt(password, backup);
           obj = JSON.parse(plain);
 
+          console.log(obj.wallets[0].privateKey.extendedPrivateKeyString);
+
           if (obj.privateKey && obj.privateKey.extendedPrivateKeyString) {
             $('#xprv').val(obj.privateKey.extendedPrivateKeyString);
+            showPhase1();
+          }
+          else if (obj.wallets && obj.wallets[0].privateKey && obj.wallets[0].privateKey
+            && obj.wallets[0].privateKey.extendedPrivateKeyString) {
+            $('#xprv').val(obj.wallets[0].privateKey.extendedPrivateKeyString);
             showPhase1();
           }
           else if (obj.xPrivKey) {
